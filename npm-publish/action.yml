@@ -12,11 +12,11 @@ inputs:
     required: false
     default: '.'
   node-version:
-    description: 'If not set .node-version is required'
+    description: 'Set sepcific node version'
     required: false
     default: ''
   node-version-file:
-    description: 'If not set .node-version is required'
+    description: 'Only used if .node-version is not set'
     required: false
     default: '.node-version'
   git-user-name:
@@ -49,7 +49,7 @@ runs:
       with:
         node-version-file: '${{ inputs.node-version-file }}'
 
-    - if: inputs.node-version == ''
+    - if: inputs.node-version != ''
       uses: actions/setup-node@v3
       with:
         node-version: '${{ inputs.node-version }}'
@@ -93,17 +93,17 @@ runs:
       run: npm run test
 
     - shell: bash
-      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run == 'true'
+      if: "steps.check.outputs.has-changes == 'true' && inputs.dry-run == 'true'"
       working-directory: '${{ inputs.working-directory }}'
       run: npm publish --dry-run
 
     - shell: bash
-      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'
+      if: "steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'"
       working-directory: '${{ inputs.working-directory }}'
       run: npm publish
 
     - shell: bash
-      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'
+      if: "steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'"
       working-directory: '${{ inputs.working-directory }}'
       run: git push origin --follow-tags
 

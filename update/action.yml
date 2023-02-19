@@ -1,0 +1,76 @@
+name: 'update'
+description: 'Publish package to npm'
+inputs:
+  run-update:
+    description: 'update script'
+    required: true
+  run-tests:
+    description: 'test script'
+    required: false
+  commit-message:
+    description: 'update script'
+    required: true
+  node-version:
+    description: 'Set sepcific node version'
+    required: false
+    default: ''
+  node-version-file:
+    description: 'Only used if .node-version is not set'
+    required: false
+    default: '.node-version'
+  git-user-name:
+    description: 'Git user.name config'
+    required: false
+    default: 'github-actions[bot]'
+  git-user-email:
+    description: 'Git user.email config'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  dry-run:
+    description: 'Git user.email config'
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+
+    - if: inputs.node-version == ''
+      uses: actions/setup-node@v3
+      with:
+        node-version-file: '${{ inputs.node-version-file }}'
+
+    - if: inputs.node-version != ''
+      uses: actions/setup-node@v3
+      with:
+        node-version: '${{ inputs.node-version }}'
+
+    - shell: bash
+      run: '${{ inputs.run-update }}'
+
+    - shell: bash
+      id: check
+      name: check if has changes
+      run: |
+        git diff
+        if [[ "$(git diff --name-only)" == "" ]]; then
+          echo "::notice::No update since last run"
+          echo "has-changes=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - shell: bash
+      if: "steps.check.outputs.has-changes == 'true' && inputs.run-tests != ''"
+      run: '${{ inputs.run-tests }}'
+
+    - shell: bash
+      if: "steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'"
+      run: |
+        git config --global user.name "${{ inputs.git-user-name }}"
+        git config --global user.email "${{ inputs.git-user-email }}"
+        git commit --all --message "${{ inputs.commit-message }}"
+        git push
+
+
