@@ -1,0 +1,109 @@
+name: 'npm-publish'
+description: 'Publish package to npm'
+inputs:
+  version:
+    description: 'major | minor | patch'
+    required: true
+  npm-token:
+    description: 'Token to authenticate agains npmjs.org'
+    required: true
+  working-directory:
+    description: 'Working directoy npm publish is executed'
+    required: false
+    default: '.'
+  node-version:
+    description: 'If not set .node-version is required'
+    required: false
+    default: ''
+  node-version-file:
+    description: 'If not set .node-version is required'
+    required: false
+    default: '.node-version'
+  git-user-name:
+    description: 'Git user.name config'
+    required: false
+    default: 'github-actions[bot]'
+  git-user-email:
+    description: 'Git user.email config'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  dry-run:
+    description: 'Git user.email config'
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 1
+
+    - shell: bash
+      run: |
+        git config --global user.name "${{ inputs.git-user-name }}"
+        git config --global user.email "${{ inputs.git-user-email }}"
+
+    - if: inputs.node-version == ''
+      uses: actions/setup-node@v3
+      with:
+        node-version-file: '${{ inputs.node-version-file }}'
+
+    - if: inputs.node-version == ''
+      uses: actions/setup-node@v3
+      with:
+        node-version: '${{ inputs.node-version }}'
+
+    - shell: bash
+      working-directory: '${{ inputs.working-directory }}'
+      run: npm ci
+
+    - shell: bash
+      run: echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token }}" >> ~/.npmrc
+
+    - shell: bash
+      id: check
+      working-directory: '${{ inputs.working-directory }}'
+      name: check if has changes
+      run: |
+        name="$(node -p 'require("./package.json").name')"
+
+        head_sha="$(npm publish --dry-run --json 2>/dev/null | jq -r .shasum)"
+        dist_sha="$(npm view "$name" --json | jq -r .dist.shasum)"
+
+        echo "::debug::$head_sha == $dist_sha"
+
+        if [[ "$head_sha" == "$dist_sha" ]]; then
+          echo "::notice::No change since last published version"
+          echo "has-changes=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - shell: bash
+      if: steps.check.outputs.has-changes == 'true'
+      working-directory: '${{ inputs.working-directory }}'
+      run: |
+        npm version "${{ inputs.version || 'patch' }}"
+        npm run build
+
+    - shell: bash
+      if: steps.check.outputs.has-changes == 'true'
+      working-directory: '${{ inputs.working-directory }}'
+      run: npm run test
+
+    - shell: bash
+      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run == 'true'
+      working-directory: '${{ inputs.working-directory }}'
+      run: npm publish --dry-run
+
+    - shell: bash
+      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'
+      working-directory: '${{ inputs.working-directory }}'
+      run: npm publish
+
+    - shell: bash
+      if: steps.check.outputs.has-changes == 'true' && inputs.dry-run != 'true'
+      working-directory: '${{ inputs.working-directory }}'
+      run: git push origin --follow-tags
+

@@ -1,0 +1,18 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+   validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: mkdir -p .tmp && curl -sS 'https://json.schemastore.org/github-action.json' > .tmp/github-action.json
+      - uses: thiagodnf/yaml-schema-checker@v0.0.8
+        with:
+          jsonSchemaFile: .tmp/github-action.json
+          yamlFiles: |
+            */action.yml
