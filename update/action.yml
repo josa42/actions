@@ -66,7 +66,7 @@ runs:
       name: check if has changes
       run: |
         git diff
-        if [[ "$(git diff --name-only)" == "" ]]; then
+        if [[ "$(git status --short)" == "" ]]; then
           echo "::notice::No update since last run"
           echo "has-changes=false" >> "$GITHUB_OUTPUT"
         else
@@ -82,7 +82,8 @@ runs:
       run: |
         git config --global user.name "${{ inputs.git-user-name }}"
         git config --global user.email "${{ inputs.git-user-email }}"
-        git commit --all --message "${{ inputs.commit-message }}"
+        git add --all
+        git commit --message "${{ inputs.commit-message }}"
         git push
 
 
