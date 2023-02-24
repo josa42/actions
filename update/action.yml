@@ -1,6 +1,9 @@
 name: 'update'
 description: 'Publish package to npm'
 inputs:
+  github-token:
+    description: ''
+    required: false
   run-update:
     description: 'update script'
     required: true
@@ -34,6 +37,9 @@ runs:
   using: "composite"
   steps:
     - uses: actions/checkout@v3
+      with:
+        token: '${{ inputs.github-token }}'
+
 
     - if: inputs.node-version == ''
       name: check node-version-file
