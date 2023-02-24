@@ -15,9 +15,8 @@ inputs:
     required: false
     default: ''
   node-version-file:
-    description: 'Only used if .node-version is not set'
+    description: 'Only used if node-version is not set'
     required: false
-    default: '.node-version'
   git-user-name:
     description: 'Git user.name config'
     required: false
@@ -37,9 +36,22 @@ runs:
     - uses: actions/checkout@v3
 
     - if: inputs.node-version == ''
+      name: check node-version-file
+      id: node-version-file
+      shell: bash
+      run: |
+        if [[ "${{ inputs.node-version-file }}" != "" ]]; then
+          echo "name=${{ inputs.node-version-file }}" >> "$GITHUB_OUTPUT"
+        elif [[ -f .node-version ]]; then
+          echo "name=.node-version" >> "$GITHUB_OUTPUT"
+        elif [[ -f .nvmrc ]]; then
+          echo "name=.nvmrc" >> "$GITHUB_OUTPUT"
+        fi
+
+    - if: steps.node-version-file.outputs.name == ''
       uses: actions/setup-node@v3
       with:
-        node-version-file: '${{ inputs.node-version-file }}'
+        node-version-file: '${{ steps.node-version-file.outputs.name }}'
 
     - if: inputs.node-version != ''
       uses: actions/setup-node@v3
