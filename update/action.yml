@@ -42,9 +42,12 @@ runs:
   using: "composite"
   steps:
     - uses: actions/checkout@v3
+      if:  inputs.github-token != ''
       with:
         token: '${{ inputs.github-token }}'
 
+    - uses: actions/checkout@v3
+      if:  inputs.github-token == ''
 
     - if: inputs.node-version == ''
       name: check node-version-file
