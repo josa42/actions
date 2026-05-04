@@ -41,12 +41,12 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v3.6.0
+    - uses: actions/checkout@v6
       if:  inputs.github-token != ''
       with:
         token: '${{ inputs.github-token }}'
 
-    - uses: actions/checkout@v3.6.0
+    - uses: actions/checkout@v6
       if:  inputs.github-token == ''
 
     - if: inputs.node-version == ''
@@ -63,12 +63,12 @@ runs:
         fi
 
     - if: steps.node-version-file.outputs.name == ''
-      uses: actions/setup-node@v3.9.1
+      uses: actions/setup-node@v6
       with:
         node-version-file: '${{ steps.node-version-file.outputs.name }}'
 
     - if: inputs.node-version != ''
-      uses: actions/setup-node@v3.9.1
+      uses: actions/setup-node@v6
       with:
         node-version: '${{ inputs.node-version }}'
 

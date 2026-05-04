@@ -35,7 +35,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v3.6.0
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 1
 
@@ -45,12 +45,12 @@ runs:
         git config --global user.email "${{ inputs.git-user-email }}"
 
     - if: inputs.node-version == ''
-      uses: actions/setup-node@v3.9.1
+      uses: actions/setup-node@v6
       with:
         node-version-file: '${{ inputs.node-version-file }}'
 
     - if: inputs.node-version != ''
-      uses: actions/setup-node@v3.9.1
+      uses: actions/setup-node@v6
       with:
         node-version: '${{ inputs.node-version }}'
 
