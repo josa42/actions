@@ -9,7 +9,7 @@ jobs:
    validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v3.6.0
       - run: mkdir -p .tmp && curl -sS 'https://json.schemastore.org/github-action.json' > .tmp/github-action.json
       - uses: thiagodnf/yaml-schema-checker@v0.0.12
         with:
