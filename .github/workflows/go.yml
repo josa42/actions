@@ -1,0 +1,72 @@
+name: Go
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: 'Working directory for Go commands'
+        required: false
+        type: string
+        default: '.'
+
+concurrency:
+  group: go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: go build ./...
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Test
+        working-directory: ${{ inputs.working-directory }}
+        run: go test ./...
+
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Vet
+        working-directory: ${{ inputs.working-directory }}
+        run: go vet ./...
