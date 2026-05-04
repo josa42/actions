@@ -1,0 +1,92 @@
+name: Go
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: 'Working directory for Go commands'
+        required: false
+        type: string
+        default: '.'
+
+concurrency:
+  group: go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: go build ./...
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Test
+        working-directory: ${{ inputs.working-directory }}
+        run: go test ./...
+
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Vet
+        working-directory: ${{ inputs.working-directory }}
+        run: go vet ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: ${{ inputs.working-directory }}
