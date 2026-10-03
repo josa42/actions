@@ -196,7 +196,17 @@ bumped. Other files holding the version go in `version_files`:
 
 The `publish` job checks out the tag and uses [release-publish]. For an
 integration it zips `custom_components/<domain>`, for anything else it attaches
-the file named by `hacs.json`. The release notes are the changelog section, or
+the file named by `hacs.json`. A card that is bundled before it ships passes
+its build command and the built file:
+
+```yaml
+    with:
+      version: ${{ inputs.version }}
+      build: npm ci && npm run build
+      files: dist/card.js
+```
+
+The build runs on the tagged commit, after the version bump. The release notes are the changelog section, or
 generated from the commits without a changelog. If publishing fails, re-run the
 failed job.
 
@@ -205,6 +215,8 @@ failed job.
 | `version` | | `1.2.3`, or `major`, `minor` or `patch` |
 | `version_files` | | Extra `path: template` lines, see [release-prepare] |
 | `files` | detected | Release assets |
+| `build` | | Command that builds the release assets, Node is set up for it |
+| `node_version` | `"22"` | Node version for `build` |
 | `draft` | `false` | |
 | `prerelease` | `false` | |
 

@@ -29,6 +29,8 @@
   `shared-ha-integration`, `shared-ha-plugin`, `shared-ha-blueprints`,
   `shared-ha-release`, `shared-esphome` and `shared-nvim-plugin`. They run on
   Node.js 24 action versions. See the [shared workflows](.github/workflows).
+- **shared-ha-release builds bundled cards.** The `build` input runs a build
+  command on the tagged commit before the release assets are attached.
 - **esphome-lint.** Lints ESPHome device configs with yamllint and
   `esphome config`, with errors as annotations on the offending line.
 
