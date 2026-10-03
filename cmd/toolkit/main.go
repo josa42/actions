@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	conventionalcommits "github.com/josa42/actions/conventional-commits"
 	changedfiles "github.com/josa42/actions/get-changed-files"
 	getpr "github.com/josa42/actions/get-pr"
 	prcomment "github.com/josa42/actions/pr-comment"
@@ -20,11 +21,12 @@ import (
 )
 
 var actions = map[string]func(context.Context) error{
-	"get-changed-files": changedfiles.Run,
-	"get-pr":            getpr.Run,
-	"pr-comment":        prcomment.Run,
-	"release-prepare":   releaseprepare.Run,
-	"release-publish":   releasepublish.Run,
+	"conventional-commits": conventionalcommits.Run,
+	"get-changed-files":    changedfiles.Run,
+	"get-pr":               getpr.Run,
+	"pr-comment":           prcomment.Run,
+	"release-prepare":      releaseprepare.Run,
+	"release-publish":      releasepublish.Run,
 }
 
 func main() {

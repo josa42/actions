@@ -15,6 +15,18 @@ jobs:
    go:
     uses: ./.github/workflows/go.yml
 
+   commits:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: ./conventional-commits
+
    # Runs the Go actions from source, the same way any branch without bin/
    # does. Needs a pull request from this repository for a writable token.
    e2e:

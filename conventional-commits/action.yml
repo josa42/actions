@@ -1,0 +1,33 @@
+name: 'conventional-commits'
+description: 'Check that commit messages and pull request titles follow Conventional Commits'
+inputs:
+  types:
+    description: 'Allowed types, one per line. Defaults to feat, fix, docs, refactor, test, chore, build, ci, perf and style.'
+    required: false
+  scopes:
+    description: 'Allowed scopes, one per line. Any scope is allowed when empty. Scopes are always optional.'
+    required: false
+  max-length:
+    description: 'Maximum length of the header, 0 to disable'
+    required: false
+    default: '72'
+  lowercase:
+    description: 'Require the description to start with a lowercase letter'
+    required: false
+    default: 'true'
+  no-trailing-period:
+    description: 'Forbid a period at the end of the description'
+    required: false
+    default: 'true'
+  comment:
+    description: 'List the problems in a pull request comment, deleted once all messages are valid'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'Token for the GitHub API'
+    required: false
+    default: '${{ github.token }}'
+
+runs:
+  using: 'node24'
+  main: 'index.js'

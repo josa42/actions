@@ -20,6 +20,10 @@
   the release atomically.
 - **release-publish.** Creates or updates the GitHub release of a tag with its
   assets. Safe to re-run after a failed upload.
+- **conventional-commits.** Checks that commit messages and pull request
+  titles follow Conventional Commits, with configurable types, scopes and
+  style rules. Problems show as annotations, in the job summary and in a pull
+  request comment that disappears once they are fixed.
 - **esphome-lint.** Lints ESPHome device configs with yamllint and
   `esphome config`, with errors as annotations on the offending line.
 
