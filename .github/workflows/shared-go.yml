@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: '.'
+      lint:
+        description: 'Additional lint command, run after gofmt'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: go-${{ github.ref }}
@@ -70,3 +75,28 @@ jobs:
       - name: Vet
         working-directory: ${{ inputs.working-directory }}
         run: go vet ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ inputs.working-directory }}/go.mod
+          cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+      - name: gofmt
+        uses: josa42/actions/gofmt-lint@dist
+        with:
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Lint
+        if: (success() || failure()) && inputs.lint != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.lint }}

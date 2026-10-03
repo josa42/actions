@@ -35,6 +35,8 @@
   `esphome config`, with errors as annotations on the offending line.
 - **gofmt-lint.** Checks that Go files are formatted with gofmt, with
   annotations on the lines gofmt would change. Files are never written.
+- **shared-go lints.** A new `lint` job runs `gofmt-lint` and, if given, the
+  command from the `lint` input.
 
 ### Changed
 

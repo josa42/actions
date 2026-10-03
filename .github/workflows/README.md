@@ -126,11 +126,14 @@ jobs:
     uses: josa42/actions/.github/workflows/shared-go.yml@main
 ```
 
-Jobs: `build`, `test` and `vet`, with the Go version from `go.mod`.
+Jobs: `build`, `test`, `vet` and `lint`, with the Go version from `go.mod`.
+`lint` runs [`gofmt-lint`](../../gofmt-lint) and then the `lint` command, if
+given.
 
 | Input | Default | |
 | --- | --- | --- |
 | `working-directory` | `.` | Directory with the `go.mod` |
+| `lint` | | Additional lint command, e.g. `make lint` |
 
 ## shared-docker-publish.yml
 
