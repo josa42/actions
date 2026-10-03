@@ -74,14 +74,18 @@ func IsNotFound(err error) bool {
 // do sends a request and decodes the JSON response into out, if not nil. It
 // returns the raw response body and the URL of the next page, if any.
 func (c *Client) do(ctx context.Context, method, path string, in, out any) ([]byte, string, error) {
-	var body []byte
-	if in != nil {
-		var err error
-		if body, err = json.Marshal(in); err != nil {
-			return nil, "", err
-		}
+	if in == nil {
+		return c.send(ctx, method, path, "", nil, out)
 	}
+	body, err := json.Marshal(in)
+	if err != nil {
+		return nil, "", err
+	}
+	return c.send(ctx, method, path, "application/json", body, out)
+}
 
+// send sends body with the given content type, see do.
+func (c *Client) send(ctx context.Context, method, path, contentType string, body []byte, out any) ([]byte, string, error) {
 	url := path
 	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
 		url = c.baseURL + path
@@ -99,8 +103,8 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) ([]by
 		req.Header.Set("Authorization", "Bearer "+c.token)
 		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 		req.Header.Set("User-Agent", "josa42-actions")
-		if body != nil {
-			req.Header.Set("Content-Type", "application/json")
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
 		}
 
 		res, err := c.http.Do(req)
