@@ -29,6 +29,10 @@
 
 ### Changed
 
+- **Shared workflows are prefixed with `shared-`.** `go.yml` is now
+  `shared-go.yml` and `docker-publish.yml` is now `shared-docker-publish.yml`,
+  so they stand apart from this repository's own workflows. Callers need to
+  update the path in `uses:`.
 - **Actions run on Node.js 24.** Every action this repository uses was moved to
   a version that runs on Node.js 24, since Node.js 20 is deprecated on GitHub
   runners.
