@@ -20,20 +20,51 @@ jobs:
    go:
     uses: ./.github/workflows/go.yml
 
-   # Runs the Go actions from source, the same way any branch without bin/ does.
-   source:
+   # Runs the Go actions from source, the same way any branch without bin/
+   # does. Needs a pull request from this repository for a writable token.
+   e2e:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - id: hello
-        uses: ./hello
+
+      - id: pr
+        uses: ./get-pr
         with:
-          name: source
+          require-pr: true
       - shell: bash
-        run: test "${{ steps.hello.outputs.greeting }}" = 'Hello, source!'
+        run: test "${{ steps.pr.outputs.number }}" = "${{ github.event.pull_request.number }}"
+
+      - id: files
+        uses: ./get-changed-files
+        with:
+          paths: |
+            **
+            !**/*.nothing
+      - shell: bash
+        run: test "${{ steps.files.outputs.matched }}" = true
+
+      - id: comment
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./pr-comment
+        with:
+          identifier: toolkit-e2e
+          body: 'e2e run ${{ github.run_id }}'
+      - if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: test -n "${{ steps.comment.outputs.comment-id }}"
+      - if: always() && matrix.os == 'ubuntu-latest'
+        uses: ./pr-comment
+        with:
+          action: delete
+          identifier: toolkit-e2e

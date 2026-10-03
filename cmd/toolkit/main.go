@@ -3,17 +3,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"slices"
 	"strings"
+	"syscall"
 
-	"github.com/josa42/actions/hello"
+	changedfiles "github.com/josa42/actions/get-changed-files"
+	getpr "github.com/josa42/actions/get-pr"
+	prcomment "github.com/josa42/actions/pr-comment"
 	"github.com/josa42/actions/toolkit"
 )
 
-var actions = map[string]func() error{
-	"hello": hello.Run,
+var actions = map[string]func(context.Context) error{
+	"get-changed-files": changedfiles.Run,
+	"get-pr":            getpr.Run,
+	"pr-comment":        prcomment.Run,
 }
 
 func main() {
@@ -28,8 +35,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx); err != nil {
 		toolkit.Error(err.Error())
+		stop()
 		os.Exit(1)
 	}
 }

@@ -1,0 +1,39 @@
+name: 'pr-comment'
+description: 'Post, update or delete a pull request comment'
+inputs:
+  github-token:
+    description: 'Token for the GitHub API'
+    required: false
+    default: '${{ github.token }}'
+  body:
+    description: 'Comment body. Mutually exclusive with body-path.'
+    required: false
+  body-path:
+    description: 'File containing the comment body. Mutually exclusive with body.'
+    required: false
+  action:
+    description: 'post or delete'
+    required: false
+    default: 'post'
+  identifier:
+    description: 'Identifies the comment, so later runs update or delete it instead of adding another one'
+    required: false
+  author:
+    description: 'Only update or delete comments by this user'
+    required: false
+  pr:
+    description: 'Pull request number to use instead of the one the workflow runs for'
+    required: false
+  require-pr:
+    description: 'Fail if no pull request is found'
+    required: false
+    default: 'false'
+outputs:
+  comment-id:
+    description: 'ID of the posted comment'
+  comment-url:
+    description: 'URL of the posted comment'
+
+runs:
+  using: 'node24'
+  main: 'index.js'

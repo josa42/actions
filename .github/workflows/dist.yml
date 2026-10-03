@@ -74,10 +74,12 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - id: hello
-        uses: josa42/actions/hello@dist
-        with:
-          name: dist
+      - id: pr
+        uses: josa42/actions/get-pr@dist
+      - id: files
+        uses: josa42/actions/get-changed-files@dist
 
       - shell: bash
-        run: test "${{ steps.hello.outputs.greeting }}" = 'Hello, dist!'
+        run: |
+          test -n "${{ steps.pr.outputs.found }}"
+          test -n "${{ steps.files.outputs.count }}"
