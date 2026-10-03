@@ -16,3 +16,24 @@ jobs:
           jsonSchemaFile: .tmp/github-action.json
           yamlFiles: |
             */action.yml
+
+   go:
+    uses: ./.github/workflows/go.yml
+
+   # Runs the Go actions from source, the same way any branch without bin/ does.
+   source:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: hello
+        uses: ./hello
+        with:
+          name: source
+      - shell: bash
+        run: test "${{ steps.hello.outputs.greeting }}" = 'Hello, source!'
