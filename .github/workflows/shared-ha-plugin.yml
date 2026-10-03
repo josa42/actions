@@ -1,0 +1,73 @@
+name: HA Plugin
+
+on:
+  workflow_call:
+    inputs:
+      node_version:
+        required: false
+        type: string
+        default: "22"
+      file:
+        description: Card entry point (read from hacs.json when empty)
+        required: false
+        type: string
+        default: ""
+      hacs_ignore:
+        description: Space separated list of HACS checks to ignore
+        required: false
+        type: string
+        default: ""
+      skip_lint:
+        required: false
+        type: string
+      skip_validate:
+        required: false
+        type: string
+
+jobs:
+  lint:
+    if: inputs.skip_lint != 'true'
+
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "${{ inputs.node_version }}"
+
+      # Cards ship unbundled, so a syntax error would reach users as a
+      # silently missing card. This is the only gate that catches it.
+      - name: Check syntax
+        run: |
+          if [[ -f package.json ]] && jq -e '.scripts.check' package.json > /dev/null; then
+            npm run check
+            exit 0
+          fi
+
+          file="${{ inputs.file }}"
+          if [[ -z "$file" ]]; then
+            file=$(jq -r '.filename // empty' hacs.json 2>/dev/null || true)
+          fi
+          if [[ -z "$file" ]]; then
+            echo "::error::no entry point found, pass one via the file input"
+            exit 1
+          fi
+          node --check "$file"
+
+  validate:
+    if: inputs.skip_validate != 'true'
+
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: plugin
+          ignore: "${{ inputs.hacs_ignore }}"

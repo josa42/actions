@@ -1,0 +1,158 @@
+name: HA Integration
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        description: Python version used for lint and tests
+        required: false
+        type: string
+        default: "3.14"
+      tests:
+        description: Directory passed to pytest
+        required: false
+        type: string
+        default: tests
+      pytest_args:
+        required: false
+        type: string
+        default: -v --tb=short
+      requirements:
+        description: Test requirements file (detected when empty)
+        required: false
+        type: string
+        default: ""
+      hacs_category:
+        required: false
+        type: string
+        default: integration
+      hacs_ignore:
+        description: Space separated list of HACS checks to ignore
+        required: false
+        type: string
+        default: ""
+      skip_lint:
+        required: false
+        type: string
+      skip_test:
+        required: false
+        type: string
+      skip_validate:
+        required: false
+        type: string
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+
+    outputs:
+      skip_lint: "${{ steps.detect.outputs.skip_lint }}"
+      skip_test: "${{ steps.detect.outputs.skip_test }}"
+      skip_validate: "${{ steps.detect.outputs.skip_validate }}"
+      paths: "${{ steps.detect.outputs.paths }}"
+      requirements: "${{ steps.detect.outputs.requirements }}"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: detect
+        name: Detect what this repo provides
+        run: |
+          if ! [[ -f ruff.toml || -f .ruff.toml ]] && ! grep -qs '\[tool\.ruff' pyproject.toml; then
+            echo "skip_lint=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          if ! [[ -d "${{ inputs.tests }}" ]]; then
+            echo "skip_test=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          if ! [[ -f hacs.json ]]; then
+            echo "skip_validate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # The two spellings both appear across these repos.
+          requirements="${{ inputs.requirements }}"
+          if [[ -z "$requirements" ]]; then
+            for file in requirements_test.txt requirements-test.txt requirements_dev.txt requirements-dev.txt; do
+              if [[ -f "$file" ]]; then
+                requirements="$file"
+                break
+              fi
+            done
+          fi
+          echo "requirements=$requirements" >> "$GITHUB_OUTPUT"
+
+          paths=""
+          for dir in custom_components "${{ inputs.tests }}"; do
+            [[ -d "$dir" ]] && paths="$paths $dir"
+          done
+          echo "paths=${paths# }" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: [setup]
+    if: inputs.skip_lint != 'true' && needs.setup.outputs.skip_lint != 'true'
+
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "${{ inputs.python_version }}"
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check ${{ needs.setup.outputs.paths }}
+
+  test:
+    needs: [setup]
+    if: inputs.skip_test != 'true' && needs.setup.outputs.skip_test != 'true'
+
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "${{ inputs.python_version }}"
+
+      - name: Install dependencies
+        run: |
+          requirements="${{ needs.setup.outputs.requirements }}"
+          if [[ -z "$requirements" ]]; then
+            echo "::error::no test requirements file found, pass one via the requirements input"
+            exit 1
+          fi
+          python -m pip install --upgrade pip
+          pip install -r "$requirements"
+
+      - name: Run tests with pytest
+        run: pytest "${{ inputs.tests }}" ${{ inputs.pytest_args }}
+
+  validate:
+    needs: [setup]
+    if: inputs.skip_validate != 'true' && needs.setup.outputs.skip_validate != 'true'
+
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: "${{ inputs.hacs_category }}"
+          ignore: "${{ inputs.hacs_ignore }}"
+
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master

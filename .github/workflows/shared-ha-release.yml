@@ -1,0 +1,139 @@
+name: HA Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to release, e.g. 1.2.3, or major, minor or patch
+        required: true
+        type: string
+      version_files:
+        description: >-
+          Extra files to set the version in, one "path: template" per line.
+          An integration's manifest.json is added automatically.
+        required: false
+        type: string
+        default: ""
+      files:
+        description: Release assets (detected when empty)
+        required: false
+        type: string
+        default: ""
+      draft:
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      tag:
+        description: The release tag
+        value: ${{ jobs.prepare.outputs.tag }}
+      url:
+        description: The release URL
+        value: ${{ jobs.publish.outputs.url }}
+
+# Two releases at once would race for the same version.
+concurrency:
+  group: ha-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  # Bumps, commits, tags and pushes. Everything that can fail before the push
+  # runs here, so a failed release leaves nothing behind.
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
+      notes: ${{ steps.prepare.outputs.notes }}
+      domain: ${{ steps.detect.outputs.domain }}
+      files: ${{ steps.detect.outputs.files }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: detect
+        name: Detect the version files and release assets
+        env:
+          EXTRA_VERSION_FILES: ${{ inputs.version_files }}
+          ASSET_FILES: ${{ inputs.files }}
+        run: |
+          domain=""
+          if [[ -d custom_components ]]; then
+            domain=$(find custom_components -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | head -1)
+          fi
+          echo "domain=$domain" >> "$GITHUB_OUTPUT"
+
+          version_files="$EXTRA_VERSION_FILES"
+          if [[ -n "$domain" ]]; then
+            version_files=$(printf '%s\n%s' "custom_components/$domain/manifest.json: \"version\": \"{version}\"" "$EXTRA_VERSION_FILES")
+          fi
+
+          # An integration is packaged in the publish job, everything else
+          # ships the file HACS points at.
+          files="$ASSET_FILES"
+          if [[ -z "$files" && -z "$domain" ]]; then
+            files=$(jq -r '.filename // empty' hacs.json 2>/dev/null || true)
+            if [[ -z "$files" ]]; then
+              echo "::error::no release assets found, pass them via the files input"
+              exit 1
+            fi
+          fi
+
+          delimiter="EOF_$RANDOM$RANDOM"
+          {
+            echo "version_files<<$delimiter"
+            echo "$version_files"
+            echo "$delimiter"
+            echo "files<<$delimiter"
+            echo "$files"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: prepare
+        uses: josa42/actions/release-prepare@dist
+        with:
+          version: ${{ inputs.version }}
+          version-files: ${{ steps.detect.outputs.version_files }}
+
+  # Packages the tagged commit and publishes it. Safe to re-run on failure.
+  publish:
+    name: Publish
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - id: package
+        name: Create the release archive
+        if: needs.prepare.outputs.domain != '' && needs.prepare.outputs.files == ''
+        env:
+          DOMAIN: ${{ needs.prepare.outputs.domain }}
+        run: |
+          (cd custom_components && zip -qr "../$DOMAIN.zip" "$DOMAIN")
+          echo "files=$DOMAIN.zip" >> "$GITHUB_OUTPUT"
+
+      - id: publish
+        uses: josa42/actions/release-publish@dist
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          notes: ${{ needs.prepare.outputs.notes }}
+          files: ${{ steps.package.outputs.files || needs.prepare.outputs.files }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}

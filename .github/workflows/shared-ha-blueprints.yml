@@ -1,0 +1,52 @@
+name: HA Blueprints
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        required: false
+        type: string
+        default: "3.12"
+      requirements:
+        description: Requirements file used for the pip cache key
+        required: false
+        type: string
+        default: requirements-dev.txt
+      targets:
+        description: Space separated make targets to run
+        required: false
+        type: string
+        default: lint validate readme-check
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "${{ inputs.python_version }}"
+          cache: pip
+          cache-dependency-path: "${{ inputs.requirements }}"
+
+      - name: Set up the virtualenv
+        run: make venv
+
+      # Every target runs even after a failure, so one broken blueprint does
+      # not hide an out of date README.
+      - name: Run checks
+        run: |
+          status=0
+          for target in ${{ inputs.targets }}; do
+            if ! grep -q "^$target:" Makefile; then
+              echo "::notice::skipping $target, no such make target"
+              continue
+            fi
+            echo "::group::make $target"
+            make "$target" || status=1
+            echo "::endgroup::"
+          done
+          exit $status

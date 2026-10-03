@@ -24,6 +24,11 @@
   titles follow Conventional Commits, with configurable types, scopes and
   style rules. Problems show as annotations, in the job summary and in a pull
   request comment that disappears once they are fixed.
+- **Shared workflows for Home Assistant, ESPHome and Neovim.** The workflows
+  of josa42/gha-workflows moved here, prefixed with `shared-`:
+  `shared-ha-integration`, `shared-ha-plugin`, `shared-ha-blueprints`,
+  `shared-ha-release`, `shared-esphome` and `shared-nvim-plugin`. They run on
+  Node.js 24 action versions. See the [shared workflows](.github/workflows).
 - **esphome-lint.** Lints ESPHome device configs with yamllint and
   `esphome config`, with errors as annotations on the offending line.
 

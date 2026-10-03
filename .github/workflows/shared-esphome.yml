@@ -1,0 +1,44 @@
+name: ESPHome
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Root of the ESPHome config
+        required: false
+        type: string
+        default: "."
+      files:
+        description: Newline separated globs of device files
+        required: false
+        type: string
+        default: "*.yaml"
+      esphome_version:
+        required: false
+        type: string
+        default: latest
+      secrets_file:
+        description: Secrets file used instead of generated dummy secrets
+        required: false
+        type: string
+        default: ""
+      secrets:
+        description: YAML mapping merged on top of the generated dummy secrets
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      # The action checks out the repository itself.
+      - uses: josa42/actions/esphome-lint@main
+        with:
+          working-directory: "${{ inputs.working_directory }}"
+          files: "${{ inputs.files }}"
+          esphome-version: "${{ inputs.esphome_version }}"
+          secrets-file: "${{ inputs.secrets_file }}"
+          secrets: "${{ inputs.secrets }}"
