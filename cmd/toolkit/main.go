@@ -14,6 +14,7 @@ import (
 	conventionalcommits "github.com/josa42/actions/conventional-commits"
 	changedfiles "github.com/josa42/actions/get-changed-files"
 	getpr "github.com/josa42/actions/get-pr"
+	gofmtlint "github.com/josa42/actions/gofmt-lint"
 	prcomment "github.com/josa42/actions/pr-comment"
 	releaseprepare "github.com/josa42/actions/release-prepare"
 	releasepublish "github.com/josa42/actions/release-publish"
@@ -24,6 +25,7 @@ var actions = map[string]func(context.Context) error{
 	"conventional-commits": conventionalcommits.Run,
 	"get-changed-files":    changedfiles.Run,
 	"get-pr":               getpr.Run,
+	"gofmt-lint":           gofmtlint.Run,
 	"pr-comment":           prcomment.Run,
 	"release-prepare":      releaseprepare.Run,
 	"release-publish":      releasepublish.Run,

@@ -33,6 +33,8 @@
   command on the tagged commit before the release assets are attached.
 - **esphome-lint.** Lints ESPHome device configs with yamllint and
   `esphome config`, with errors as annotations on the offending line.
+- **gofmt-lint.** Checks that Go files are formatted with gofmt, with
+  annotations on the lines gofmt would change. Files are never written.
 
 ### Changed
 

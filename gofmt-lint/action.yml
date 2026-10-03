@@ -1,0 +1,14 @@
+name: 'gofmt-lint'
+description: 'Check that Go files are formatted with gofmt, with annotations on the unformatted lines'
+inputs:
+  working-directory:
+    description: 'Directory to check, recursively'
+    required: false
+    default: '.'
+outputs:
+  files:
+    description: 'Unformatted files, one per line, relative to the repository root'
+
+runs:
+  using: 'node24'
+  main: 'index.js'
