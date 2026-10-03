@@ -9,13 +9,8 @@ jobs:
    validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: mkdir -p .tmp && curl -sSL 'https://json.schemastore.org/github-action.json' > .tmp/github-action.json
-      - uses: thiagodnf/yaml-schema-checker@v0.0.12
-        with:
-          jsonSchemaFile: .tmp/github-action.json
-          yamlFiles: |
-            */action.yml
+      - uses: actions/checkout@v7
+      - run: pipx run check-jsonschema==0.38.2 --builtin-schema vendor.github-actions ./*/action.yml
 
    go:
     uses: ./.github/workflows/go.yml
@@ -33,8 +28,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
