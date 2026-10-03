@@ -1,0 +1,75 @@
+name: 'esphome-lint'
+description: 'Lint ESPHome device configs with yamllint and esphome config'
+inputs:
+  working-directory:
+    description: 'Root of the ESPHome config'
+    required: false
+    default: '.'
+  files:
+    description: 'Newline separated globs of device files, relative to working-directory. Files without a top-level esphome key are skipped.'
+    required: false
+    default: '*.yaml'
+  esphome-version:
+    description: 'ESPHome version to install (e.g. 2026.9.1)'
+    required: false
+    default: 'latest'
+  secrets-file:
+    description: 'Path to a secrets file to use instead of generated dummy secrets'
+    required: false
+    default: ''
+  secrets:
+    description: 'YAML mapping merged on top of the generated dummy secrets'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: esphome-lint-pip-${{ runner.os }}-${{ inputs.esphome-version }}
+
+    - shell: bash
+      name: install esphome
+      run: |
+        if [[ "${{ inputs.esphome-version }}" == "latest" ]]; then
+          pip install esphome yamllint
+        else
+          pip install "esphome==${{ inputs.esphome-version }}" yamllint
+        fi
+
+    # Runs before secrets are generated, so a dummy secrets.yaml is never linted.
+    # Runs from the repo root so annotation paths are relative to it.
+    - shell: bash
+      name: yamllint
+      run: |
+        dir="${{ inputs.working-directory }}"
+        config="${{ github.action_path }}/yamllint.yaml"
+        for f in "$dir/.yamllint" "$dir/.yamllint.yaml" "$dir/.yamllint.yml"; do
+          if [[ -f "$f" ]]; then config="$f"; break; fi
+        done
+        yamllint --format github --config-file "$config" "$dir" | sed 's#file=\./#file=#'
+
+    - shell: bash
+      name: prepare secrets
+      if: success() || failure()
+      working-directory: '${{ inputs.working-directory }}'
+      env:
+        SECRETS_FILE: '${{ inputs.secrets-file }}'
+        SECRETS: '${{ inputs.secrets }}'
+      run: python "${{ github.action_path }}/secrets.py"
+
+    - shell: bash
+      name: esphome config
+      if: success() || failure()
+      working-directory: '${{ inputs.working-directory }}'
+      env:
+        FILES: '${{ inputs.files }}'
+      run: python "${{ github.action_path }}/config.py"

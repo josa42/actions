@@ -1,0 +1,28 @@
+name: 'get-changed-files'
+description: 'Get the files changed by the pull request or push'
+inputs:
+  paths:
+    description: 'Newline separated path patterns, with the syntax of on.<push|pull_request>.paths. A pattern without wildcards also matches everything below it.'
+    required: false
+  github-token:
+    description: 'Token for the GitHub API'
+    required: false
+    default: '${{ github.token }}'
+  pr:
+    description: 'Pull request number to use instead of the one the workflow runs for'
+    required: false
+  require-pr:
+    description: 'Fail if no pull request is found'
+    required: false
+    default: 'false'
+outputs:
+  files:
+    description: 'JSON array of the matching files that exist after the change'
+  matched:
+    description: 'Whether any change matches, including deleted and renamed files'
+  count:
+    description: 'Number of files in files'
+
+runs:
+  using: 'node24'
+  main: 'index.js'

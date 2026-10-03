@@ -1,0 +1,41 @@
+name: 'get-pr'
+description: 'Get the pull request the workflow runs for'
+inputs:
+  github-token:
+    description: 'Token for the GitHub API'
+    required: false
+    default: '${{ github.token }}'
+  pr:
+    description: 'Pull request number to use instead of the one the workflow runs for'
+    required: false
+  require-pr:
+    description: 'Fail if no pull request is found'
+    required: false
+    default: 'false'
+outputs:
+  found:
+    description: 'Whether a pull request was found'
+  number:
+    description: 'Pull request number'
+  url:
+    description: 'Pull request URL'
+  title:
+    description: 'Pull request title'
+  head-ref:
+    description: 'Head branch'
+  head-sha:
+    description: 'Head commit SHA'
+  base-ref:
+    description: 'Base branch'
+  base-sha:
+    description: 'Base commit SHA'
+  draft:
+    description: 'Whether the pull request is a draft'
+  labels:
+    description: 'Newline separated label names'
+  json:
+    description: 'The pull request as returned by the GitHub API'
+
+runs:
+  using: 'node24'
+  main: 'index.js'
