@@ -1,0 +1,83 @@
+name: Dist
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: dist
+  cancel-in-progress: false
+
+jobs:
+  dist:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Prepare dist worktree
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          tree="$RUNNER_TEMP/dist"
+          if git fetch --depth=1 origin dist; then
+            git worktree add --detach "$tree" FETCH_HEAD
+            git -C "$tree" rm -rq --ignore-unmatch .
+          else
+            git worktree add --orphan -b dist "$tree"
+          fi
+          echo "DIST=$tree" >> "$GITHUB_ENV"
+
+      # Everything except Go sources, docs and repo config.
+      - name: Copy action files
+        run: |
+          git archive HEAD -- . ':!*.go' ':!*.md' ':!go.mod' ':!go.sum' ':!.github' ':!.gitignore' \
+            | tar -x -C "$DIST"
+
+      - name: Build binaries
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos=${target%/*}
+            goarch=${target#*/}
+            ext=''
+            if [[ $goos == windows ]]; then ext=.exe; fi
+            GOOS=$goos GOARCH=$goarch go build -trimpath -ldflags='-s -w' \
+              -o "$DIST/bin/toolkit-$goos-$goarch$ext" ./cmd/toolkit
+          done
+
+      - name: Commit and push
+        working-directory: ${{ env.DIST }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo '::notice::dist is up to date'
+            exit 0
+          fi
+          git commit -q -m "dist: ${GITHUB_SHA}"
+          git push origin HEAD:refs/heads/dist
+
+  smoke:
+    needs: dist
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: hello
+        uses: josa42/actions/hello@dist
+        with:
+          name: dist
+
+      - shell: bash
+        run: test "${{ steps.hello.outputs.greeting }}" = 'Hello, dist!'
