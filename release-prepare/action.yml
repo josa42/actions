@@ -1,0 +1,42 @@
+name: 'release-prepare'
+description: 'Bump the version, promote the changelog, then commit, tag and push the release'
+inputs:
+  version:
+    description: 'Version to release, e.g. 1.2.3, or major, minor or patch to bump the latest release'
+    required: true
+  version-files:
+    description: 'Files to set the version in, one "path: template" per line, e.g. manifest.json: "version": "{version}"'
+    required: false
+  changelog:
+    description: 'Changelog whose "## Unreleased" section becomes the release. Skipped if the file does not exist.'
+    required: false
+    default: 'CHANGELOG.md'
+  tag-format:
+    description: 'Tag name, with a {version} placeholder'
+    required: false
+    default: 'v{version}'
+  commit-message:
+    description: 'Message of the version bump commit, with a {version} placeholder'
+    required: false
+    default: 'chore: bump version to {version}'
+  allow-branch:
+    description: 'Allow releasing from a branch other than the default branch'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token for the GitHub API'
+    required: false
+    default: '${{ github.token }}'
+outputs:
+  version:
+    description: 'The released version'
+  tag:
+    description: 'The release tag'
+  sha:
+    description: 'The tagged commit'
+  notes:
+    description: 'The changelog section of the release, empty without a changelog'
+
+runs:
+  using: 'node24'
+  main: 'index.js'

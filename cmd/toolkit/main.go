@@ -14,6 +14,8 @@ import (
 	changedfiles "github.com/josa42/actions/get-changed-files"
 	getpr "github.com/josa42/actions/get-pr"
 	prcomment "github.com/josa42/actions/pr-comment"
+	releaseprepare "github.com/josa42/actions/release-prepare"
+	releasepublish "github.com/josa42/actions/release-publish"
 	"github.com/josa42/actions/toolkit"
 )
 
@@ -21,6 +23,8 @@ var actions = map[string]func(context.Context) error{
 	"get-changed-files": changedfiles.Run,
 	"get-pr":            getpr.Run,
 	"pr-comment":        prcomment.Run,
+	"release-prepare":   releaseprepare.Run,
+	"release-publish":   releasepublish.Run,
 }
 
 func main() {
