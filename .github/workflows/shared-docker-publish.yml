@@ -7,6 +7,11 @@ on:
         description: 'Docker Hub image name (e.g. josa/myapp)'
         required: true
         type: string
+      use-arm-runner:
+        description: 'Use a native ARM64 runner for the ARM64 build'
+        required: false
+        type: boolean
+        default: false
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -30,7 +35,7 @@ jobs:
           - platform: amd64
             runner: ubuntu-latest
           - platform: arm64
-            runner: ubuntu-latest
+            runner: ${{ inputs.use-arm-runner && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v7
