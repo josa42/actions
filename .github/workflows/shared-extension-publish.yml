@@ -89,12 +89,24 @@ jobs:
           node-version: 24
 
       # The version comes from the manifest in each zip; the dist repository
-      # records what is published.
+      # records what is published. A browser without credentials is skipped,
+      # so one store can be set up before the other.
       - name: Versions
         id: versions
+        env:
+          HAS_CHROME: ${{ inputs.chrome-extension-id != '' && secrets.CHROME_CLIENT_ID != '' && secrets.CHROME_CLIENT_SECRET != '' && secrets.CHROME_REFRESH_TOKEN != '' && secrets.CHROME_PUBLISHER_ID != '' }}
+          HAS_FIREFOX: ${{ secrets.AMO_API_KEY != '' && secrets.AMO_API_SECRET != '' }}
         run: |
           mkdir -p "dist/$NAME"
           version() { unzip -p "$1" manifest.json | jq -r .version; }
+          if [ -n "$CHROME_ZIP" ] && [ "$HAS_CHROME" != "true" ]; then
+            echo "::notice::Chrome skipped: chrome-extension-id or a CHROME_* secret is missing"
+            CHROME_ZIP=
+          fi
+          if [ -n "$FIREFOX_ZIP" ] && [ "$HAS_FIREFOX" != "true" ]; then
+            echo "::notice::Firefox skipped: AMO_API_KEY or AMO_API_SECRET is missing"
+            FIREFOX_ZIP=
+          fi
           if [ -n "$CHROME_ZIP" ]; then
             v=$(version "$CHROME_ZIP")
             published=$(jq -r '.version // ""' "dist/$NAME/chrome.json" 2>/dev/null || true)
@@ -131,10 +143,6 @@ jobs:
           EXTENSION_ID: ${{ inputs.chrome-extension-id }}
           VERSION: ${{ steps.versions.outputs.chrome }}
         run: |
-          if [ -z "$EXTENSION_ID" ]; then
-            echo "::error::chrome-extension-id is missing; create the item in the Chrome Web Store first"
-            exit 1
-          fi
           # Uploads and submits for review; the item stays unlisted.
           npx --yes chrome-webstore-upload-cli@4 --source "$CHROME_ZIP" --extension-id "$EXTENSION_ID"
           jq -n --arg v "$VERSION" --arg url "https://chromewebstore.google.com/detail/$EXTENSION_ID" \

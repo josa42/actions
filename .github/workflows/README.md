@@ -198,6 +198,10 @@ recorded in the dist repository already (`chrome.json`, `updates.json`) is
 skipped, so the job can run on every release tag; bump the version of the
 extension to publish it.
 
+A browser whose credentials are missing (the Chrome secrets and
+`chrome-extension-id`, or the AMO secrets) is skipped with a notice, so one
+store can be set up before the other.
+
 | Input | Default | |
 | --- | --- | --- |
 | `name` | | Folder in the dist repository, required |
