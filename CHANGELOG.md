@@ -37,6 +37,10 @@
   annotations on the lines gofmt would change. Files are never written.
 - **shared-go lints.** A new `lint` job runs `gofmt-lint` and, if given, the
   command from the `lint` input.
+- **shared-extension-publish.** Publishes a browser extension unlisted: to the
+  Chrome Web Store, and for Firefox signed at addons.mozilla.org, with the
+  `.xpi` and its `updates.json` pushed to a dist repository. Versions that are
+  published already are skipped.
 
 ### Changed
 

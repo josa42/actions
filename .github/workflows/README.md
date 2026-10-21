@@ -15,6 +15,7 @@ Call one with `uses: josa42/actions/.github/workflows/<file>@main`.
 | [`shared-nvim-plugin.yml`](shared-nvim-plugin.yml) | Neovim plugins: stylua and plenary busted |
 | [`shared-go.yml`](shared-go.yml) | Go modules: build, test and vet |
 | [`shared-docker-publish.yml`](shared-docker-publish.yml) | Multi-arch Docker images pushed to Docker Hub |
+| [`shared-extension-publish.yml`](shared-extension-publish.yml) | Browser extensions, unlisted in the Chrome Web Store and signed for Firefox |
 
 Each workflow detects what the calling repository actually contains and skips
 the jobs that do not apply, so most callers need no inputs at all.
@@ -154,6 +155,62 @@ manifest tagged `latest`.
 | Input | Default | |
 | --- | --- | --- |
 | `image` | | Docker Hub image name, required |
+
+## shared-extension-publish.yml
+
+```yaml
+jobs:
+  extension-publish:
+    needs: extension
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: josa42/actions/.github/workflows/shared-extension-publish.yml@main
+    with:
+      name: myapp
+      artifact: myapp-browser-extensions
+      chrome-zip: myapp-chrome.zip
+      firefox-zip: myapp-firefox.zip
+      chrome-extension-id: ${{ vars.CHROME_EXTENSION_ID }}
+    secrets:
+      CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+      CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+      CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+      CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+      DIST_TOKEN: ${{ secrets.EXTENSION_DIST_TOKEN }}
+```
+
+Publishes the zips of an artifact from the same run, built by an earlier
+job. Both stores get the extension unlisted: it is not found by search, only
+by its link.
+
+- **Chrome:** uploads to the existing item and submits it for review. The
+  item has to be created once by hand in the developer dashboard, with the
+  visibility "Unlisted".
+- **Firefox:** signs at addons.mozilla.org on the unlisted channel and
+  pushes `<name>/<name>-<version>.xpi`, `<name>/<name>.xpi` (the newest) and
+  `<name>/updates.json` to the dist repository. The manifest must set
+  `browser_specific_settings.gecko.update_url` to
+  `<dist-url>/<name>/updates.json`, so that Firefox updates it.
+
+The version comes from `manifest.json` in each zip. A version that is
+recorded in the dist repository already (`chrome.json`, `updates.json`) is
+skipped, so the job can run on every release tag; bump the version of the
+extension to publish it.
+
+| Input | Default | |
+| --- | --- | --- |
+| `name` | | Folder in the dist repository, required |
+| `artifact` | | Artifact with the zips, required |
+| `chrome-zip` / `firefox-zip` | | Zip in the artifact; empty skips that browser |
+| `chrome-extension-id` | | Item in the Chrome Web Store |
+| `dist-repository` | `josa42/extension-dist` | |
+| `dist-url` | `https://josa.gesell.me/extension-dist` | Where GitHub Pages serves it |
+
+`DIST_TOKEN` needs write access to the contents of the dist repository. The
+Chrome secrets are an OAuth client of the Chrome Web Store API with its
+refresh token and the publisher ID; the AMO secrets are the JWT issuer and
+secret from addons.mozilla.org.
 
 ## shared-ha-release.yml
 

@@ -1,0 +1,176 @@
+name: Browser Extension Publish
+
+# Publishes a browser extension unlisted: to the Chrome Web Store, and for
+# Firefox signed at addons.mozilla.org with the .xpi and its updates.json in
+# the dist repository (served by GitHub Pages). A version that is published
+# already is skipped, so the caller can run this on every release tag.
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: 'Folder of the extension in the dist repository (e.g. print-tracker)'
+        required: true
+        type: string
+      artifact:
+        description: 'Artifact of this run that holds the zips'
+        required: true
+        type: string
+      chrome-zip:
+        description: 'Zip for Chrome in the artifact; empty skips Chrome'
+        required: false
+        type: string
+        default: ''
+      firefox-zip:
+        description: 'Zip for Firefox in the artifact; empty skips Firefox'
+        required: false
+        type: string
+        default: ''
+      chrome-extension-id:
+        description: 'ID of the item in the Chrome Web Store'
+        required: false
+        type: string
+        default: ''
+      dist-repository:
+        description: 'Repository for the Firefox files'
+        required: false
+        type: string
+        default: josa42/extension-dist
+      dist-url:
+        description: 'Address the dist repository is served at'
+        required: false
+        type: string
+        default: https://josa.gesell.me/extension-dist
+    secrets:
+      CHROME_CLIENT_ID:
+        required: false
+      CHROME_CLIENT_SECRET:
+        required: false
+      CHROME_REFRESH_TOKEN:
+        required: false
+      CHROME_PUBLISHER_ID:
+        required: false
+      AMO_API_KEY:
+        required: false
+      AMO_API_SECRET:
+        required: false
+      DIST_TOKEN:
+        description: 'Token that may push to the dist repository'
+        required: true
+
+concurrency:
+  group: extension-publish-${{ inputs.name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      NAME: ${{ inputs.name }}
+      DIST_URL: ${{ inputs.dist-url }}
+      CHROME_ZIP: ${{ inputs.chrome-zip && format('in/{0}', inputs.chrome-zip) || '' }}
+      FIREFOX_ZIP: ${{ inputs.firefox-zip && format('in/{0}', inputs.firefox-zip) || '' }}
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.artifact }}
+          path: in
+
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.dist-repository }}
+          token: ${{ secrets.DIST_TOKEN }}
+          path: dist
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The version comes from the manifest in each zip; the dist repository
+      # records what is published.
+      - name: Versions
+        id: versions
+        run: |
+          mkdir -p "dist/$NAME"
+          version() { unzip -p "$1" manifest.json | jq -r .version; }
+          if [ -n "$CHROME_ZIP" ]; then
+            v=$(version "$CHROME_ZIP")
+            published=$(jq -r '.version // ""' "dist/$NAME/chrome.json" 2>/dev/null || true)
+            echo "chrome=$v" >> "$GITHUB_OUTPUT"
+            if [ "$v" != "$published" ]; then echo "chrome-new=true" >> "$GITHUB_OUTPUT"; fi
+            echo "Chrome: $v (published: ${published:-none})"
+          fi
+          if [ -n "$FIREFOX_ZIP" ]; then
+            manifest=$(unzip -p "$FIREFOX_ZIP" manifest.json)
+            v=$(jq -r .version <<<"$manifest")
+            id=$(jq -r '.browser_specific_settings.gecko.id // ""' <<<"$manifest")
+            update_url=$(jq -r '.browser_specific_settings.gecko.update_url // ""' <<<"$manifest")
+            # Without it the signed extension never updates.
+            if [ "$update_url" != "$DIST_URL/$NAME/updates.json" ]; then
+              echo "::error::gecko.update_url must be $DIST_URL/$NAME/updates.json, is '$update_url'"
+              exit 1
+            fi
+            known=$(jq -r --arg id "$id" --arg v "$v" \
+              '[.addons[$id].updates[]? | select(.version == $v)] | length' \
+              "dist/$NAME/updates.json" 2>/dev/null || echo 0)
+            echo "firefox=$v" >> "$GITHUB_OUTPUT"
+            echo "gecko-id=$id" >> "$GITHUB_OUTPUT"
+            if [ "$known" = "0" ]; then echo "firefox-new=true" >> "$GITHUB_OUTPUT"; fi
+            echo "Firefox: $v (published: $([ "$known" = "0" ] && echo no || echo yes))"
+          fi
+
+      - name: Chrome Web Store
+        if: steps.versions.outputs.chrome-new == 'true'
+        env:
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          EXTENSION_ID: ${{ inputs.chrome-extension-id }}
+          VERSION: ${{ steps.versions.outputs.chrome }}
+        run: |
+          if [ -z "$EXTENSION_ID" ]; then
+            echo "::error::chrome-extension-id is missing; create the item in the Chrome Web Store first"
+            exit 1
+          fi
+          # Uploads and submits for review; the item stays unlisted.
+          npx --yes chrome-webstore-upload-cli@4 --source "$CHROME_ZIP" --extension-id "$EXTENSION_ID"
+          jq -n --arg v "$VERSION" --arg url "https://chromewebstore.google.com/detail/$EXTENSION_ID" \
+            '{version: $v, url: $url}' > "dist/$NAME/chrome.json"
+
+      - name: Firefox
+        if: steps.versions.outputs.firefox-new == 'true'
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+          VERSION: ${{ steps.versions.outputs.firefox }}
+          GECKO_ID: ${{ steps.versions.outputs.gecko-id }}
+        run: |
+          mkdir -p src signed
+          unzip -q "$FIREFOX_ZIP" -d src
+          # Unlisted: signed by an automatic review, not shown in the store.
+          npx --yes web-ext@10 sign --channel=unlisted --source-dir src --artifacts-dir signed \
+            --api-key "$AMO_API_KEY" --api-secret "$AMO_API_SECRET"
+          file="$NAME-$VERSION.xpi"
+          cp signed/*.xpi "dist/$NAME/$file"
+          # A stable link to the newest version, for install buttons.
+          cp signed/*.xpi "dist/$NAME/$NAME.xpi"
+          updates="dist/$NAME/updates.json"
+          [ -f "$updates" ] || echo '{"addons":{}}' > "$updates"
+          jq --arg id "$GECKO_ID" --arg v "$VERSION" --arg link "$DIST_URL/$NAME/$file" \
+            '.addons[$id].updates = ((.addons[$id].updates // []) + [{version: $v, update_link: $link}])' \
+            "$updates" > updates.json && mv updates.json "$updates"
+
+      # Also after a failed step, so that what was published is recorded.
+      - name: Push
+        if: ${{ !cancelled() }}
+        working-directory: dist
+        run: |
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$NAME: publish"
+          git push
