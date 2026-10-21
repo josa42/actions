@@ -189,4 +189,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "$NAME: publish"
-          git push
+          # Other extensions publish to the same repository at the same time,
+          # each into its own folder: take theirs and try again.
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            sleep $((attempt * 5))
+            git pull --rebase
+          done
+          exit 1
