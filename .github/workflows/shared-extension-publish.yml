@@ -73,7 +73,7 @@ jobs:
       CHROME_ZIP: ${{ inputs.chrome-zip && format('in/{0}', inputs.chrome-zip) || '' }}
       FIREFOX_ZIP: ${{ inputs.firefox-zip && format('in/{0}', inputs.firefox-zip) || '' }}
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.artifact }}
           path: in
@@ -170,6 +170,14 @@ jobs:
           jq --arg id "$GECKO_ID" --arg v "$VERSION" --arg link "$DIST_URL/$NAME/$file" \
             '.addons[$id].updates = ((.addons[$id].updates // []) + [{version: $v, update_link: $link}])' \
             "$updates" > updates.json && mv updates.json "$updates"
+
+      # A version is signed only once; keep the file even when the push fails.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && steps.versions.outputs.firefox-new == 'true' }}
+        with:
+          name: ${{ inputs.name }}-firefox-signed
+          path: signed/*.xpi
+          if-no-files-found: ignore
 
       # Also after a failed step, so that what was published is recorded.
       - name: Push
