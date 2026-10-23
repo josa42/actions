@@ -52,6 +52,10 @@
 - **shared-release.** Releases an app by hand: sets the version, tags, pushes
   and creates the GitHub release, optionally only after a workflow succeeded
   for the released commit.
+- **shared-docker-publish tags releases.** The `version` input tags the
+  image with the version and major.minor besides `latest`, `ref` builds
+  another ref such as the release tag, and `build-args` passes build
+  arguments.
 
 ### Changed
 

@@ -153,9 +153,32 @@ jobs:
 Builds the image for amd64 and arm64 and pushes both, plus a multi-arch
 manifest tagged `latest`.
 
+With a `version`, the manifest is also tagged with the version and its
+major.minor, `1.2.3` and `1.2`. Together with `ref`, that publishes a release
+built by [`shared-release.yml`](#shared-releaseyml) from its tag:
+
+```yaml
+  docker:
+    needs: release
+    uses: josa42/actions/.github/workflows/shared-docker-publish.yml@main
+    with:
+      image: josa/myapp
+      ref: ${{ needs.release.outputs.tag }}
+      version: ${{ needs.release.outputs.version }}
+      build-args: |
+        VERSION=${{ needs.release.outputs.version }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+```
+
 | Input | Default | |
 | --- | --- | --- |
 | `image` | | Docker Hub image name, required |
+| `use-arm-runner` | `false` | Build arm64 on a native ARM runner |
+| `ref` | the triggering ref | Ref to build, e.g. a release tag |
+| `version` | | Also tag the image with the version and major.minor |
+| `build-args` | | Build arguments, one `KEY=value` per line |
 
 ## shared-extension-publish.yml
 
