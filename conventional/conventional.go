@@ -109,3 +109,22 @@ func CheckHeader(header string, cfg Config) []string {
 	}
 	return v
 }
+
+// Commit is a parsed Conventional Commits header.
+type Commit struct {
+	Type        string
+	Scope       string
+	Breaking    bool
+	Description string
+}
+
+// Parse parses header, the first line of a commit message. ok is false if
+// it is not type(scope): description. The type is not checked against a
+// list.
+func Parse(header string) (c Commit, ok bool) {
+	m := headerRe.FindStringSubmatch(strings.TrimSpace(header))
+	if m == nil || strings.TrimSpace(m[5]) == "" {
+		return c, false
+	}
+	return Commit{Type: m[1], Scope: strings.TrimSpace(m[2]), Breaking: m[3] == "!", Description: strings.TrimSpace(m[5])}, true
+}

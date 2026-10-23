@@ -119,3 +119,29 @@ func TestCheckHeaderIgnoresBodyRules(t *testing.T) {
 		t.Error("CheckHeader(Add x) is valid")
 	}
 }
+
+func TestParse(t *testing.T) {
+	tests := []struct {
+		header string
+		want   Commit
+		ok     bool
+	}{
+		{"feat: add x", Commit{Type: "feat", Description: "add x"}, true},
+		{"fix(server): handle y", Commit{Type: "fix", Scope: "server", Description: "handle y"}, true},
+		{"feat(api)!: drop v1", Commit{Type: "feat", Scope: "api", Breaking: true, Description: "drop v1"}, true},
+		{"perf!: faster", Commit{Type: "perf", Breaking: true, Description: "faster"}, true},
+		{"chore: bump version to 1.0.0", Commit{Type: "chore", Description: "bump version to 1.0.0"}, true},
+		{"  feat:add x  ", Commit{Type: "feat", Description: "add x"}, true},
+		{"Add release script", Commit{}, false},
+		{"Merge pull request #1 from josa42/x", Commit{}, false},
+		{"Revert \"feat: add x\"", Commit{}, false},
+		{"fixup! feat: add x", Commit{}, false},
+		{"feat: ", Commit{}, false},
+	}
+	for _, tt := range tests {
+		got, ok := Parse(tt.header)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("Parse(%q) = %+v, %v, want %+v, %v", tt.header, got, ok, tt.want, tt.ok)
+		}
+	}
+}
