@@ -10,6 +10,9 @@ inputs:
   npm-packages:
     description: 'Directories of npm packages to set the version in, one per line. Sets it in package.json and, if there is one, package-lock.json.'
     required: false
+  only-if-changed:
+    description: 'Directories, one per line, whose version files and npm packages only get the version if the directory changed since the latest release'
+    required: false
   changelog:
     description: 'Changelog whose "## Unreleased" section becomes the release. Skipped if the file does not exist.'
     required: false
@@ -39,6 +42,8 @@ outputs:
     description: 'The tagged commit'
   notes:
     description: 'The changelog section of the release, empty without a changelog'
+  changed:
+    description: 'The only-if-changed directories that got the version, one per line'
 
 runs:
   using: 'node24'

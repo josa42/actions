@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type inputs struct {
 	version       string
 	files         []versionfile.File
 	npmPackages   []string
+	onlyIfChanged []string
 	changelog     string
 	tagFormat     string
 	commitMessage string
@@ -36,6 +38,7 @@ func readInputs() (inputs, error) {
 		tagFormat:     toolkit.Input("tag-format"),
 		commitMessage: toolkit.Input("commit-message"),
 		npmPackages:   toolkit.InputList("npm-packages"),
+		onlyIfChanged: toolkit.InputList("only-if-changed"),
 	}
 	if in.version == "" {
 		return in, errors.New("input version is required")
@@ -102,7 +105,16 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("tag %s already exists", tag)
 	}
 
-	p, err := plan(in, version, time.Now().UTC().Format("2006-01-02"))
+	since := ""
+	if hasLatest {
+		since = strings.ReplaceAll(in.tagFormat, "{version}", latest.String())
+	}
+	h, err := readHistory(git.Repo{Dir: "."}, in, since)
+	if err != nil {
+		return err
+	}
+
+	p, err := plan(in, version, time.Now().UTC().Format("2006-01-02"), h)
 	if err != nil {
 		return err
 	}
@@ -122,6 +134,7 @@ func Run(ctx context.Context) error {
 		"tag":     tag,
 		"sha":     sha,
 		"notes":   p.notes,
+		"changed": strings.Join(p.changed, "\n"),
 	} {
 		if err := toolkit.SetOutput(name, value); err != nil {
 			return err
@@ -151,6 +164,31 @@ func checkBranch(ctx context.Context, client *github.Client, gh *github.Context,
 	return branch, nil
 }
 
+// history is what happened since the latest release.
+type history struct {
+	// changed are the only-if-changed directories that changed.
+	changed []string
+}
+
+// readHistory compares the checkout with since, the tag of the latest
+// release. Without one, every directory counts as changed.
+func readHistory(repo git.Repo, in inputs, since string) (history, error) {
+	var h history
+	for _, dir := range in.onlyIfChanged {
+		changed := since == ""
+		if !changed {
+			var err error
+			if changed, err = repo.ChangedSince(since, dir); err != nil {
+				return h, fmt.Errorf("%w. only-if-changed needs the tags, check out with fetch-depth: 0", err)
+			}
+		}
+		if changed {
+			h.changed = append(h.changed, dir)
+		}
+	}
+	return h, nil
+}
+
 type edit struct {
 	path    string
 	content string
@@ -159,6 +197,9 @@ type edit struct {
 type releasePlan struct {
 	edits []edit
 	notes string
+	// changed are the changed only-if-changed directories with a file that
+	// got the version.
+	changed []string
 }
 
 func (p releasePlan) paths() []string {
@@ -171,7 +212,7 @@ func (p releasePlan) paths() []string {
 
 // plan computes every file change of the release without writing anything,
 // so a failing check leaves the working tree untouched.
-func plan(in inputs, version, date string) (releasePlan, error) {
+func plan(in inputs, version, date string, h history) (releasePlan, error) {
 	var p releasePlan
 
 	if in.changelog != "" {
@@ -193,6 +234,10 @@ func plan(in inputs, version, date string) (releasePlan, error) {
 	}
 
 	for _, f := range in.files {
+		if dir, ok := unchanged(in, h, f.Path); ok {
+			fmt.Printf("%s: %s did not change, skipped\n", f.Path, dir)
+			continue
+		}
 		content, err := current(p.edits, f.Path)
 		if err != nil {
 			return p, err
@@ -207,6 +252,10 @@ func plan(in inputs, version, date string) (releasePlan, error) {
 
 	for _, dir := range in.npmPackages {
 		pkg := path.Join(dir, "package.json")
+		if d, ok := unchanged(in, h, dir); ok {
+			fmt.Printf("%s: %s did not change, skipped\n", pkg, d)
+			continue
+		}
 		content, err := current(p.edits, pkg)
 		if err != nil {
 			return p, err
@@ -233,7 +282,33 @@ func plan(in inputs, version, date string) (releasePlan, error) {
 		fmt.Printf("%s: %s → %s\n", lock, old, version)
 	}
 
+	for _, dir := range h.changed {
+		for _, e := range p.edits {
+			if e.path != in.changelog && inside(e.path, dir) {
+				p.changed = append(p.changed, dir)
+				break
+			}
+		}
+	}
+
 	return p, nil
+}
+
+// unchanged returns the only-if-changed directory holding name if that did
+// not change since the latest release.
+func unchanged(in inputs, h history, name string) (string, bool) {
+	for _, dir := range in.onlyIfChanged {
+		if inside(name, dir) && !slices.Contains(h.changed, dir) {
+			return dir, true
+		}
+	}
+	return "", false
+}
+
+// inside reports whether name is dir or in it.
+func inside(name, dir string) bool {
+	name, dir = path.Clean(name), path.Clean(dir)
+	return dir == "." || name == dir || strings.HasPrefix(name, dir+"/")
 }
 
 // current returns the content of a file, with the edits planned so far.

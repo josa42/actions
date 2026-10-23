@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -61,7 +62,7 @@ func TestPlan(t *testing.T) {
 			{Path: "x/__init__.py", Template: `B = "{version}"`},
 		},
 	}
-	p, err := plan(in, "1.3.0", "2026-10-03")
+	p, err := plan(in, "1.3.0", "2026-10-03", history{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestPlanWithoutChangelog(t *testing.T) {
 	p, err := plan(inputs{
 		changelog: "CHANGELOG.md",
 		files:     []versionfile.File{{Path: "manifest.json", Template: `"version": "{version}"`}},
-	}, "1.3.0", "2026-10-03")
+	}, "1.3.0", "2026-10-03", history{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestPlanNPMPackages(t *testing.T) {
 	write(t, "app/package-lock.json", packageLock)
 	write(t, "extension/package.json", packageJSON)
 
-	p, err := plan(inputs{npmPackages: []string{"app", "extension/"}}, "1.3.0", "2026-10-03")
+	p, err := plan(inputs{npmPackages: []string{"app", "extension/"}}, "1.3.0", "2026-10-03", history{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +132,62 @@ func TestPlanNPMPackages(t *testing.T) {
 	for _, e := range p.edits {
 		if e.content != want[e.path] {
 			t.Errorf("%s = %q, want %q", e.path, e.content, want[e.path])
+		}
+	}
+}
+
+func TestPlanOnlyIfChanged(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "CHANGELOG.md", "## Unreleased\n\n- New\n")
+	write(t, "server/version.go", "const Version = \"1.2.0\"\n")
+	write(t, "app/package.json", packageJSON)
+	write(t, "extension/package.json", packageJSON)
+	write(t, "extension/manifest.json", manifest)
+	write(t, "docs/package.json", packageJSON)
+
+	in := inputs{
+		changelog: "CHANGELOG.md",
+		files: []versionfile.File{
+			{Path: "server/version.go", Template: `const Version = "{version}"`},
+			{Path: "extension/manifest.json", Template: `"version": "{version}"`},
+		},
+		npmPackages:   []string{"app", "extension", "docs"},
+		onlyIfChanged: []string{"server", "app/", "extension", "docs"},
+	}
+	p, err := plan(in, "1.3.0", "2026-10-03", history{changed: []string{"app/", "extension", "docs-old"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var paths []string
+	for _, e := range p.edits {
+		paths = append(paths, e.path)
+	}
+	if want := []string{"CHANGELOG.md", "extension/manifest.json", "app/package.json", "extension/package.json"}; !slices.Equal(paths, want) {
+		t.Errorf("edits = %q, want %q", paths, want)
+	}
+	if want := []string{"app/", "extension"}; !slices.Equal(p.changed, want) {
+		t.Errorf("changed = %q, want %q", p.changed, want)
+	}
+}
+
+func TestInside(t *testing.T) {
+	tests := []struct {
+		name, dir string
+		want      bool
+	}{
+		{"app/package.json", "app", true},
+		{"app/package.json", "app/", true},
+		{"./app/package.json", "app", true},
+		{"app", "app", true},
+		{"app/src/a.ts", "app", true},
+		{"package.json", ".", true},
+		{"application/package.json", "app", false},
+		{"package.json", "app", false},
+	}
+	for _, tt := range tests {
+		if got := inside(tt.name, tt.dir); got != tt.want {
+			t.Errorf("inside(%q, %q) = %v", tt.name, tt.dir, got)
 		}
 	}
 }
@@ -173,7 +230,7 @@ func TestPlanErrors(t *testing.T) {
 			for p, c := range tt.files {
 				write(t, p, c)
 			}
-			if _, err := plan(tt.in, "1.3.0", "2026-10-03"); err == nil {
+			if _, err := plan(tt.in, "1.3.0", "2026-10-03", history{}); err == nil {
 				t.Error("did not fail")
 			}
 		})
@@ -308,7 +365,7 @@ func TestRun(t *testing.T) {
 		t.Errorf("changelog = %s", got)
 	}
 
-	for name, want := range map[string]string{"version": "1.3.0", "tag": "v1.3.0", "sha": head, "notes": "- New"} {
+	for name, want := range map[string]string{"version": "1.3.0", "tag": "v1.3.0", "sha": head, "notes": "- New", "changed": ""} {
 		if got := outputValue(t, outputs, name); got != want {
 			t.Errorf("output %s = %q, want %q", name, got, want)
 		}
@@ -342,6 +399,7 @@ func TestRunFailsBeforeChanges(t *testing.T) {
 		{"tag ref", nil, "main", map[string]string{"GITHUB_REF_TYPE": "tag"}},
 		{"bad changelog", nil, "main", map[string]string{"INPUT_CHANGELOG": "x/manifest.json"}},
 		{"bad version file", nil, "main", map[string]string{"INPUT_VERSION-FILES": `x/manifest.json: "vers": "{version}"`}},
+		{"latest tag not fetched", []string{"v1.2.0"}, "main", map[string]string{"INPUT_ONLY-IF-CHANGED": "x"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -376,5 +434,36 @@ func TestRunAllowBranch(t *testing.T) {
 	}
 	if got := run(t, remote, "log", "-1", "--format=%s", "feature"); got != "chore: bump version to 0.1.0" {
 		t.Errorf("feature = %s", got)
+	}
+}
+
+func TestRunOnlyIfChanged(t *testing.T) {
+	remote, outputs := setupRun(t, []string{"v1.2.0"}, "main")
+	write(t, "server/version.go", "const Version = \"1.2.0\"\n")
+	write(t, "app/package.json", packageJSON)
+	write(t, "app/package-lock.json", packageLock)
+	run(t, ".", "add", ".")
+	run(t, ".", "commit", "-q", "-m", "feat: add server and app")
+	run(t, ".", "tag", "v1.2.0")
+	write(t, "app/index.ts", "")
+	run(t, ".", "add", ".")
+	run(t, ".", "commit", "-q", "-m", "feat(app): add index")
+	run(t, ".", "push", "-q", "origin", "main")
+
+	t.Setenv("INPUT_VERSION-FILES", `server/version.go: const Version = "{version}"`)
+	t.Setenv("INPUT_NPM-PACKAGES", "app")
+	t.Setenv("INPUT_ONLY-IF-CHANGED", "server\napp")
+
+	if err := Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := run(t, remote, "show", "main:server/version.go"); got != `const Version = "1.2.0"` {
+		t.Errorf("server/version.go = %s", got)
+	}
+	if got := run(t, remote, "show", "main:app/package-lock.json"); strings.Count(got, `"version": "1.3.0"`) != 2 {
+		t.Errorf("app/package-lock.json = %s", got)
+	}
+	if got := outputValue(t, outputs, "changed"); got != "app" {
+		t.Errorf("output changed = %q", got)
 	}
 }

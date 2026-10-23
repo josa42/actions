@@ -43,6 +43,9 @@
   published already are skipped.
 - **release-prepare sets npm versions.** The `npm-packages` input sets the
   version in the `package.json` and `package-lock.json` of each directory.
+- **release-prepare skips unchanged parts.** Files in an `only-if-changed`
+  directory keep their version unless the directory changed since the latest
+  release. The `changed` output lists the directories that got it.
 
 ### Changed
 

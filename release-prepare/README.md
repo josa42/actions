@@ -40,25 +40,27 @@ Start a release with `gh workflow run release -f version=minor`.
 
 ## Inputs
 
-| Input            | Default                            | Description                                                     |
-| ---------------- | ---------------------------------- | --------------------------------------------------------------- |
-| `version`        |                                    | `1.2.3`, or `major`, `minor` or `patch`                         |
-| `version-files`  |                                    | Files to set the version in, one `path: template` per line      |
-| `npm-packages`   |                                    | Directories of npm packages to set the version in, one per line |
-| `changelog`      | `CHANGELOG.md`                     | Changelog to promote, skipped if the file does not exist        |
-| `tag-format`     | `v{version}`                       | Tag name                                                        |
-| `commit-message` | `chore: bump version to {version}` | Message of the bump commit                                      |
-| `allow-branch`   | `false`                            | Allow releasing from a branch other than the default branch     |
-| `github-token`   | `${{ github.token }}`              | Token for the GitHub API                                        |
+| Input             | Default                            | Description                                                                |
+| ----------------- | ---------------------------------- | -------------------------------------------------------------------------- |
+| `version`         |                                    | `1.2.3`, or `major`, `minor` or `patch`                                    |
+| `version-files`   |                                    | Files to set the version in, one `path: template` per line                 |
+| `npm-packages`    |                                    | Directories of npm packages to set the version in, one per line            |
+| `only-if-changed` |                                    | Directories whose files only get the version if they changed, one per line |
+| `changelog`       | `CHANGELOG.md`                     | Changelog to promote, skipped if the file does not exist                   |
+| `tag-format`      | `v{version}`                       | Tag name                                                                   |
+| `commit-message`  | `chore: bump version to {version}` | Message of the bump commit                                                 |
+| `allow-branch`    | `false`                            | Allow releasing from a branch other than the default branch                |
+| `github-token`    | `${{ github.token }}`              | Token for the GitHub API                                                   |
 
 ## Outputs
 
-| Output    | Description                                               |
-| --------- | --------------------------------------------------------- |
-| `version` | The released version, e.g. `1.2.3`                        |
-| `tag`     | The release tag, e.g. `v1.2.3`                            |
-| `sha`     | The tagged commit                                         |
-| `notes`   | The promoted changelog section, empty without a changelog |
+| Output    | Description                                                          |
+| --------- | -------------------------------------------------------------------- |
+| `version` | The released version, e.g. `1.2.3`                                   |
+| `tag`     | The release tag, e.g. `v1.2.3`                                       |
+| `sha`     | The tagged commit                                                    |
+| `notes`   | The promoted changelog section, empty without a changelog            |
+| `changed` | The `only-if-changed` directories that got the version, one per line |
 
 ## How it works
 
@@ -107,6 +109,27 @@ The top-level `"version"` of `package.json` is set, which must be the only
 `"version"` in the file. If the directory has a `package-lock.json`, its
 top-level `"version"` and the one of the root package, `packages[""]`, are
 set too. The versions of dependencies and the formatting stay as they are.
+
+### Only if changed
+
+In a repository with several parts, `only-if-changed` keeps the version of a
+part that did not change since the latest release:
+
+```yaml
+npm-packages: |
+  app
+  extension
+only-if-changed: |
+  extension
+```
+
+A version file or npm package inside one of these directories only gets the
+new version if the directory differs from the latest release tag. Without a
+previous release, every directory counts as changed. The checkout needs the
+tags, so check out with `fetch-depth: 0`.
+
+The `changed` output lists the directories that changed and got the
+version, so later steps can publish only those.
 
 ### Changelog
 
