@@ -3,6 +3,7 @@
 package versionfile
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -54,6 +55,54 @@ func Replace(content, template, version string) (string, string, error) {
 		return "", "", fmt.Errorf("template %q matches %d times, expected once", template, len(matches))
 	}
 
+	start, end := matches[0][2], matches[0][3]
+	return content[:start] + version + content[end:], content[start:end], nil
+}
+
+var indentRe = regexp.MustCompile(`(?m)^([ \t]+)"`)
+
+// ReplaceNPMLock sets the version in a package-lock.json: the top-level
+// "version" and the one of the root package, packages[""]. The versions of
+// dependencies are left alone. It returns the new content and the top-level
+// version it replaced.
+func ReplaceNPMLock(content, version string) (string, string, error) {
+	// npm keeps the indentation of package.json, two spaces by default.
+	m := indentRe.FindStringSubmatch(content)
+	if m == nil {
+		return "", "", errors.New("not a package-lock.json")
+	}
+	indent := regexp.QuoteMeta(m[1])
+
+	content, old, err := replaceOnce(content, `(?m)^`+indent+`"version": "([0-9A-Za-z.+_-]*)"`, version, `the top-level "version"`)
+	if err != nil {
+		return "", "", err
+	}
+
+	// The root package runs from `"": {` to the closing brace at the same
+	// indentation.
+	entries := regexp.MustCompile(`(?m)^`+indent+indent+`"": \{\r?$`).FindAllStringIndex(content, -1)
+	if len(entries) != 1 {
+		return "", "", fmt.Errorf(`packages[""] found %d times, expected once`, len(entries))
+	}
+	start := entries[0][1]
+	end := len(content)
+	if loc := regexp.MustCompile(`(?m)^` + indent + indent + `\}`).FindStringIndex(content[start:]); loc != nil {
+		end = start + loc[0]
+	}
+	entry, _, err := replaceOnce(content[start:end], `(?m)^`+indent+indent+indent+`"version": "([0-9A-Za-z.+_-]*)"`, version, `the "version" of packages[""]`)
+	if err != nil {
+		return "", "", err
+	}
+	return content[:start] + entry + content[end:], old, nil
+}
+
+// replaceOnce replaces the first group of pattern, which must match exactly
+// once, with version.
+func replaceOnce(content, pattern, version, what string) (string, string, error) {
+	matches := regexp.MustCompile(pattern).FindAllStringSubmatchIndex(content, -1)
+	if len(matches) != 1 {
+		return "", "", fmt.Errorf("%s found %d times, expected once", what, len(matches))
+	}
 	start, end := matches[0][2], matches[0][3]
 	return content[:start] + version + content[end:], content[start:end], nil
 }

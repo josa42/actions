@@ -2,6 +2,7 @@ package versionfile
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -129,6 +130,87 @@ func TestReplaceErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, _, err := Replace(tt.content, tt.template, "1.3.0"); err == nil {
+				t.Error("did not fail")
+			}
+		})
+	}
+}
+
+const npmLock = `{
+  "name": "app",
+  "version": "1.2.3",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "app",
+      "version": "1.2.3",
+      "dependencies": {
+        "react": "^19.0.0"
+      }
+    },
+    "node_modules/react": {
+      "version": "19.0.0",
+      "resolved": "https://registry.npmjs.org/react/-/react-19.0.0.tgz",
+      "license": "MIT"
+    }
+  }
+}
+`
+
+func TestReplaceNPMLock(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name:    "two spaces",
+			content: npmLock,
+			want:    strings.Replace(strings.Replace(npmLock, `"version": "1.2.3"`, `"version": "1.3.0"`, 1), `"version": "1.2.3"`, `"version": "1.3.0"`, 1),
+		},
+		{
+			name:    "tabs",
+			content: "{\n\t\"name\": \"app\",\n\t\"version\": \"1.2.3\",\n\t\"packages\": {\n\t\t\"\": {\n\t\t\t\"version\": \"1.2.3\"\n\t\t},\n\t\t\"node_modules/a\": {\n\t\t\t\"version\": \"1.2.3\"\n\t\t}\n\t}\n}\n",
+			want:    "{\n\t\"name\": \"app\",\n\t\"version\": \"1.3.0\",\n\t\"packages\": {\n\t\t\"\": {\n\t\t\t\"version\": \"1.3.0\"\n\t\t},\n\t\t\"node_modules/a\": {\n\t\t\t\"version\": \"1.2.3\"\n\t\t}\n\t}\n}\n",
+		},
+		{
+			name:    "crlf",
+			content: strings.ReplaceAll(npmLock, "\n", "\r\n"),
+			want:    strings.ReplaceAll(strings.Replace(strings.Replace(npmLock, `"version": "1.2.3"`, `"version": "1.3.0"`, 1), `"version": "1.2.3"`, `"version": "1.3.0"`, 1), "\n", "\r\n"),
+		},
+		{
+			name:    "root package after a dependency with the same version",
+			content: "{\n  \"version\": \"1.2.3\",\n  \"packages\": {\n    \"node_modules/a\": {\n      \"version\": \"1.2.3\"\n    },\n    \"\": {\n      \"version\": \"1.2.3\"\n    }\n  }\n}\n",
+			want:    "{\n  \"version\": \"1.3.0\",\n  \"packages\": {\n    \"node_modules/a\": {\n      \"version\": \"1.2.3\"\n    },\n    \"\": {\n      \"version\": \"1.3.0\"\n    }\n  }\n}\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, old, err := ReplaceNPMLock(tt.content, "1.3.0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want || old != "1.2.3" {
+				t.Errorf("got %q, %q, want %q, %q", got, old, tt.want, "1.2.3")
+			}
+		})
+	}
+}
+
+func TestReplaceNPMLockErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"empty", ""},
+		{"no top-level version", "{\n  \"name\": \"app\",\n  \"packages\": {\n    \"\": {\n      \"version\": \"1.2.3\"\n    }\n  }\n}\n"},
+		{"no root package", "{\n  \"version\": \"1.2.3\",\n  \"lockfileVersion\": 1,\n  \"dependencies\": {\n    \"a\": {\n      \"version\": \"1.0.0\"\n    }\n  }\n}\n"},
+		{"root package without version", "{\n  \"version\": \"1.2.3\",\n  \"packages\": {\n    \"\": {\n      \"name\": \"app\"\n    },\n    \"node_modules/a\": {\n      \"version\": \"1.0.0\"\n    }\n  }\n}\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := ReplaceNPMLock(tt.content, "1.3.0"); err == nil {
 				t.Error("did not fail")
 			}
 		})
