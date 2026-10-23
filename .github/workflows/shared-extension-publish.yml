@@ -3,7 +3,9 @@ name: Browser Extension Publish
 # Publishes a browser extension unlisted: to the Chrome Web Store, and for
 # Firefox signed at addons.mozilla.org with the .xpi and its updates.json in
 # the dist repository (served by GitHub Pages). A version that is published
-# already is skipped, so the caller can run this on every release tag.
+# already is skipped, so the caller can run this on every release tag. The
+# zips come from an artifact of the run, or with build from a command it
+# runs on a checkout of ref.
 
 on:
   workflow_call:
@@ -13,9 +15,25 @@ on:
         required: true
         type: string
       artifact:
-        description: 'Artifact of this run that holds the zips'
-        required: true
+        description: 'Artifact of this run that holds the zips; not with build'
+        required: false
         type: string
+        default: ''
+      build:
+        description: 'Command that builds the zips in working-directory, e.g. make package; instead of artifact'
+        required: false
+        type: string
+        default: ''
+      ref:
+        description: 'Ref to check out for build, e.g. the release tag (empty: the triggering ref)'
+        required: false
+        type: string
+        default: ''
+      working-directory:
+        description: 'Directory of the extension for build; the zip paths are relative to it'
+        required: false
+        type: string
+        default: '.'
       chrome-zip:
         description: 'Zip for Chrome in the artifact; empty skips Chrome'
         required: false
@@ -73,10 +91,23 @@ jobs:
       CHROME_ZIP: ${{ inputs.chrome-zip && format('in/{0}', inputs.chrome-zip) || '' }}
       FIREFOX_ZIP: ${{ inputs.firefox-zip && format('in/{0}', inputs.firefox-zip) || '' }}
     steps:
+      - name: Check the inputs
+        if: (inputs.artifact == '') == (inputs.build == '')
+        run: |
+          echo "::error::set either artifact or build"
+          exit 1
+
       - uses: actions/download-artifact@v8
+        if: inputs.build == ''
         with:
           name: ${{ inputs.artifact }}
           path: in
+
+      - uses: actions/checkout@v7
+        if: inputs.build != ''
+        with:
+          ref: ${{ inputs.ref }}
+          path: src
 
       - uses: actions/checkout@v7
         with:
@@ -87,6 +118,22 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: ${{ inputs.build != '' && 'npm' || '' }}
+          cache-dependency-path: ${{ inputs.build != '' && format('src/{0}/package-lock.json', inputs.working-directory) || '' }}
+
+      # The zips land where the artifact would put them.
+      - name: Build the zips
+        if: inputs.build != ''
+        working-directory: src/${{ inputs.working-directory }}
+        env:
+          BUILD: ${{ inputs.build }}
+          ZIPS: ${{ inputs.chrome-zip }} ${{ inputs.firefox-zip }}
+        run: |
+          bash -euo pipefail -c "$BUILD"
+          for zip in $ZIPS; do
+            mkdir -p "$GITHUB_WORKSPACE/in/$(dirname "$zip")"
+            cp "$zip" "$GITHUB_WORKSPACE/in/$zip"
+          done
 
       # The version comes from the manifest in each zip; the dist repository
       # records what is published. A browser without credentials is skipped,

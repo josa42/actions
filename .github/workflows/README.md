@@ -205,7 +205,26 @@ jobs:
 ```
 
 Publishes the zips of an artifact from the same run, built by an earlier
-job. Both stores get the extension unlisted: it is not found by search, only
+job, or builds them itself with `build` on a checkout of `ref`, e.g. the tag
+of a release:
+
+```yaml
+  extension:
+    needs: release
+    if: contains(needs.release.outputs.changed, 'extension')
+    uses: josa42/actions/.github/workflows/shared-extension-publish.yml@main
+    with:
+      name: myapp
+      build: make package
+      ref: ${{ needs.release.outputs.tag }}
+      working-directory: extension
+      chrome-zip: dist/myapp-chrome.zip
+      firefox-zip: dist/myapp-firefox.zip
+      chrome-extension-id: ${{ vars.CHROME_EXTENSION_ID }}
+    secrets: # as above
+```
+
+Both stores get the extension unlisted: it is not found by search, only
 by its link.
 
 - **Chrome:** uploads to the existing item and submits it for review. The
@@ -229,8 +248,11 @@ store can be set up before the other.
 | Input | Default | |
 | --- | --- | --- |
 | `name` | | Folder in the dist repository, required |
-| `artifact` | | Artifact with the zips, required |
-| `chrome-zip` / `firefox-zip` | | Zip in the artifact; empty skips that browser |
+| `artifact` | | Artifact with the zips; either this or `build` |
+| `build` | | Command that builds the zips in `working-directory`, e.g. `make package`, with Node 24 and the npm cache |
+| `ref` | the triggering ref | Ref to check out for `build` |
+| `working-directory` | `.` | Directory of the extension for `build` |
+| `chrome-zip` / `firefox-zip` | | Zip in the artifact, or relative to `working-directory` with `build`; empty skips that browser |
 | `chrome-extension-id` | | Item in the Chrome Web Store |
 | `dist-repository` | `josa42/extension-dist` | |
 | `dist-url` | `https://josa.gesell.me/extension-dist` | Where GitHub Pages serves it |

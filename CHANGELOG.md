@@ -56,6 +56,9 @@
   image with the version and major.minor besides `latest`, `ref` builds
   another ref such as the release tag, and `build-args` passes build
   arguments.
+- **shared-extension-publish builds the zips.** With `build`, it runs the
+  command in `working-directory` on a checkout of `ref`, such as the release
+  tag, instead of taking the zips from an artifact of the run.
 
 ### Changed
 
