@@ -40,15 +40,16 @@ Start a release with `gh workflow run release -f version=minor`.
 
 ## Inputs
 
-| Input            | Default                            | Description                                                   |
-| ---------------- | ---------------------------------- | ------------------------------------------------------------- |
-| `version`        |                                    | `1.2.3`, or `major`, `minor` or `patch`                       |
-| `version-files`  |                                    | Files to set the version in, one `path: template` per line    |
-| `changelog`      | `CHANGELOG.md`                     | Changelog to promote, skipped if the file does not exist      |
-| `tag-format`     | `v{version}`                       | Tag name                                                      |
-| `commit-message` | `chore: bump version to {version}` | Message of the bump commit                                    |
-| `allow-branch`   | `false`                            | Allow releasing from a branch other than the default branch   |
-| `github-token`   | `${{ github.token }}`              | Token for the GitHub API                                      |
+| Input            | Default                            | Description                                                     |
+| ---------------- | ---------------------------------- | --------------------------------------------------------------- |
+| `version`        |                                    | `1.2.3`, or `major`, `minor` or `patch`                         |
+| `version-files`  |                                    | Files to set the version in, one `path: template` per line      |
+| `npm-packages`   |                                    | Directories of npm packages to set the version in, one per line |
+| `changelog`      | `CHANGELOG.md`                     | Changelog to promote, skipped if the file does not exist        |
+| `tag-format`     | `v{version}`                       | Tag name                                                        |
+| `commit-message` | `chore: bump version to {version}` | Message of the bump commit                                      |
+| `allow-branch`   | `false`                            | Allow releasing from a branch other than the default branch     |
+| `github-token`   | `${{ github.token }}`              | Token for the GitHub API                                        |
 
 ## Outputs
 
@@ -91,6 +92,21 @@ A template matches from the start of a line, after indentation, and may be
 followed by more text on that line. It must match exactly once, so a typo or
 a moved line fails the release instead of shipping a stale version. The rest
 of the file is left as is.
+
+### npm packages
+
+Each line of `npm-packages` is a directory with a `package.json`:
+
+```yaml
+npm-packages: |
+  app
+  extension
+```
+
+The top-level `"version"` of `package.json` is set, which must be the only
+`"version"` in the file. If the directory has a `package-lock.json`, its
+top-level `"version"` and the one of the root package, `packages[""]`, are
+set too. The versions of dependencies and the formatting stay as they are.
 
 ### Changelog
 

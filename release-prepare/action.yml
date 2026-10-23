@@ -7,6 +7,9 @@ inputs:
   version-files:
     description: 'Files to set the version in, one "path: template" per line, e.g. manifest.json: "version": "{version}"'
     required: false
+  npm-packages:
+    description: 'Directories of npm packages to set the version in, one per line. Sets it in package.json and, if there is one, package-lock.json.'
+    required: false
   changelog:
     description: 'Changelog whose "## Unreleased" section becomes the release. Skipped if the file does not exist.'
     required: false

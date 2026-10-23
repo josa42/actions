@@ -41,6 +41,8 @@
   Chrome Web Store, and for Firefox signed at addons.mozilla.org, with the
   `.xpi` and its `updates.json` pushed to a dist repository. Versions that are
   published already are skipped.
+- **release-prepare sets npm versions.** The `npm-packages` input sets the
+  version in the `package.json` and `package-lock.json` of each directory.
 
 ### Changed
 

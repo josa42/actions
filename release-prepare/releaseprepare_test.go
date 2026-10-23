@@ -104,6 +104,37 @@ func TestPlanWithoutChangelog(t *testing.T) {
 	}
 }
 
+const (
+	packageJSON = "{\n  \"name\": \"app\",\n  \"version\": \"1.2.0\",\n  \"private\": true\n}\n"
+	packageLock = "{\n  \"name\": \"app\",\n  \"version\": \"1.2.0\",\n  \"packages\": {\n    \"\": {\n      \"name\": \"app\",\n      \"version\": \"1.2.0\"\n    },\n    \"node_modules/a\": {\n      \"version\": \"1.2.0\"\n    }\n  }\n}\n"
+)
+
+func TestPlanNPMPackages(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "app/package.json", packageJSON)
+	write(t, "app/package-lock.json", packageLock)
+	write(t, "extension/package.json", packageJSON)
+
+	p, err := plan(inputs{npmPackages: []string{"app", "extension/"}}, "1.3.0", "2026-10-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]string{
+		"app/package.json":       strings.Replace(packageJSON, "1.2.0", "1.3.0", 1),
+		"app/package-lock.json":  strings.Replace(strings.Replace(packageLock, "1.2.0", "1.3.0", 1), "1.2.0", "1.3.0", 1),
+		"extension/package.json": strings.Replace(packageJSON, "1.2.0", "1.3.0", 1),
+	}
+	if len(p.edits) != len(want) {
+		t.Fatalf("edits = %v", p.edits)
+	}
+	for _, e := range p.edits {
+		if e.content != want[e.path] {
+			t.Errorf("%s = %q, want %q", e.path, e.content, want[e.path])
+		}
+	}
+}
+
 func TestPlanErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -119,6 +150,16 @@ func TestPlanErrors(t *testing.T) {
 			name:  "missing version file",
 			files: map[string]string{},
 			in:    inputs{files: []versionfile.File{{Path: "manifest.json", Template: `"version": "{version}"`}}},
+		},
+		{
+			name:  "missing package.json",
+			files: map[string]string{"app/package-lock.json": packageLock},
+			in:    inputs{npmPackages: []string{"app"}},
+		},
+		{
+			name:  "package-lock.json without root package",
+			files: map[string]string{"app/package.json": packageJSON, "app/package-lock.json": "{\n  \"version\": \"1.2.0\"\n}\n"},
+			in:    inputs{npmPackages: []string{"app"}},
 		},
 		{
 			name:  "template does not match",

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 type inputs struct {
 	version       string
 	files         []versionfile.File
+	npmPackages   []string
 	changelog     string
 	tagFormat     string
 	commitMessage string
@@ -33,6 +35,7 @@ func readInputs() (inputs, error) {
 		changelog:     toolkit.Input("changelog"),
 		tagFormat:     toolkit.Input("tag-format"),
 		commitMessage: toolkit.Input("commit-message"),
+		npmPackages:   toolkit.InputList("npm-packages"),
 	}
 	if in.version == "" {
 		return in, errors.New("input version is required")
@@ -190,20 +193,10 @@ func plan(in inputs, version, date string) (releasePlan, error) {
 	}
 
 	for _, f := range in.files {
-		content, found := "", false
-		for _, e := range p.edits {
-			if e.path == f.Path {
-				content, found = e.content, true
-			}
+		content, err := current(p.edits, f.Path)
+		if err != nil {
+			return p, err
 		}
-		if !found {
-			data, err := os.ReadFile(f.Path)
-			if err != nil {
-				return p, err
-			}
-			content = string(data)
-		}
-
 		updated, old, err := versionfile.Replace(content, f.Template, version)
 		if err != nil {
 			return p, fmt.Errorf("%s: %w", f.Path, err)
@@ -212,7 +205,46 @@ func plan(in inputs, version, date string) (releasePlan, error) {
 		fmt.Printf("%s: %s → %s\n", f.Path, old, version)
 	}
 
+	for _, dir := range in.npmPackages {
+		pkg := path.Join(dir, "package.json")
+		content, err := current(p.edits, pkg)
+		if err != nil {
+			return p, err
+		}
+		updated, old, err := versionfile.Replace(content, `"version": "{version}"`, version)
+		if err != nil {
+			return p, fmt.Errorf("%s: %w", pkg, err)
+		}
+		p.edits = setEdit(p.edits, edit{pkg, updated})
+		fmt.Printf("%s: %s → %s\n", pkg, old, version)
+
+		lock := path.Join(dir, "package-lock.json")
+		content, err = current(p.edits, lock)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return p, err
+		}
+		if updated, old, err = versionfile.ReplaceNPMLock(content, version); err != nil {
+			return p, fmt.Errorf("%s: %w", lock, err)
+		}
+		p.edits = setEdit(p.edits, edit{lock, updated})
+		fmt.Printf("%s: %s → %s\n", lock, old, version)
+	}
+
 	return p, nil
+}
+
+// current returns the content of a file, with the edits planned so far.
+func current(edits []edit, name string) (string, error) {
+	for _, e := range edits {
+		if e.path == name {
+			return e.content, nil
+		}
+	}
+	data, err := os.ReadFile(name)
+	return string(data), err
 }
 
 // setEdit adds e, replacing an earlier edit of the same file, so several
