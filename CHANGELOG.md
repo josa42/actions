@@ -46,6 +46,9 @@
 - **release-prepare skips unchanged parts.** Files in an `only-if-changed`
   directory keep their version unless the directory changed since the latest
   release. The `changed` output lists the directories that got it.
+- **release-prepare writes notes from commits.** With `commit-notes` and no
+  changelog, the release notes list the features, fixes and performance
+  improvements among the Conventional Commits since the latest release.
 
 ### Changed
 

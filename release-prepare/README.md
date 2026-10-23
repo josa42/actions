@@ -47,6 +47,7 @@ Start a release with `gh workflow run release -f version=minor`.
 | `npm-packages`    |                                    | Directories of npm packages to set the version in, one per line            |
 | `only-if-changed` |                                    | Directories whose files only get the version if they changed, one per line |
 | `changelog`       | `CHANGELOG.md`                     | Changelog to promote, skipped if the file does not exist                   |
+| `commit-notes`    | `false`                            | Without a changelog, generate the notes from the commits                   |
 | `tag-format`      | `v{version}`                       | Tag name                                                                   |
 | `commit-message`  | `chore: bump version to {version}` | Message of the bump commit                                                 |
 | `allow-branch`    | `false`                            | Allow releasing from a branch other than the default branch                |
@@ -54,13 +55,13 @@ Start a release with `gh workflow run release -f version=minor`.
 
 ## Outputs
 
-| Output    | Description                                                          |
-| --------- | -------------------------------------------------------------------- |
-| `version` | The released version, e.g. `1.2.3`                                   |
-| `tag`     | The release tag, e.g. `v1.2.3`                                       |
-| `sha`     | The tagged commit                                                    |
-| `notes`   | The promoted changelog section, empty without a changelog            |
-| `changed` | The `only-if-changed` directories that got the version, one per line |
+| Output    | Description                                                                       |
+| --------- | --------------------------------------------------------------------------------- |
+| `version` | The released version, e.g. `1.2.3`                                                |
+| `tag`     | The release tag, e.g. `v1.2.3`                                                    |
+| `sha`     | The tagged commit                                                                 |
+| `notes`   | The promoted changelog section, or the notes from the commits with `commit-notes` |
+| `changed` | The `only-if-changed` directories that got the version, one per line              |
 
 ## How it works
 
@@ -140,6 +141,28 @@ content becomes the `notes` output. `## [Unreleased]` becomes
 The release fails if the changelog exists but has no `## Unreleased`
 section, the section is empty, or there already is a section for the
 version.
+
+### Commit notes
+
+Without a changelog, `commit-notes: true` generates the notes from the
+subjects of the commits since the latest release, or of every commit for the
+first release. Conventional Commits of the types `feat`, `fix` and `perf` are
+grouped, breaking changes are marked:
+
+```markdown
+### Features
+
+- **server:** add accounts
+- **app:** drop the old import **(breaking)**
+
+### Fixes
+
+- handle empty imports
+```
+
+Other types, such as `chore`, `docs` or `refactor`, and commits that are no
+Conventional Commits are left out. The notes are empty if nothing is left.
+The checkout needs the history and tags, so check out with `fetch-depth: 0`.
 
 <!-- internal links -->
 

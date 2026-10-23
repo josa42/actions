@@ -192,6 +192,90 @@ func TestInside(t *testing.T) {
 	}
 }
 
+func TestCommitNotes(t *testing.T) {
+	tests := []struct {
+		name     string
+		subjects []string
+		want     string
+	}{
+		{
+			name: "grouped by type",
+			subjects: []string{
+				"feat(server): add accounts",
+				"fix: handle empty imports",
+				"chore(deps): bump react",
+				"perf(app): cache the overview",
+				"Merge pull request #1 from josa42/x",
+				"feat(app)!: drop the old import",
+				"docs: describe the release",
+				"fix(extension): match the new site",
+			},
+			want: "### Features\n\n- **server:** add accounts\n- **app:** drop the old import **(breaking)**\n\n" +
+				"### Fixes\n\n- handle empty imports\n- **extension:** match the new site\n\n" +
+				"### Performance\n\n- **app:** cache the overview",
+		},
+		{
+			name:     "only fixes",
+			subjects: []string{"fix: x"},
+			want:     "### Fixes\n\n- x",
+		},
+		{
+			name:     "nothing qualifies",
+			subjects: []string{"chore: x", "test: y", "build: z", "ci: a", "refactor: b", "style: c", "Initial commit"},
+			want:     "",
+		},
+		{
+			name: "no commits",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := commitNotes(tt.subjects); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlanCommitNotes(t *testing.T) {
+	h := history{subjects: []string{"feat: add x"}}
+
+	t.Run("without changelog", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		p, err := plan(inputs{changelog: "CHANGELOG.md", commitNotes: true}, "1.3.0", "2026-10-03", h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.notes != "### Features\n\n- add x" {
+			t.Errorf("notes = %q", p.notes)
+		}
+	})
+
+	t.Run("changelog wins", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		write(t, "CHANGELOG.md", "## Unreleased\n\n- New\n")
+		p, err := plan(inputs{changelog: "CHANGELOG.md", commitNotes: true}, "1.3.0", "2026-10-03", h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.notes != "- New" {
+			t.Errorf("notes = %q", p.notes)
+		}
+	})
+
+	t.Run("off", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		p, err := plan(inputs{changelog: "CHANGELOG.md"}, "1.3.0", "2026-10-03", h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.notes != "" {
+			t.Errorf("notes = %q", p.notes)
+		}
+	})
+}
+
 func TestPlanErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -239,7 +323,7 @@ func TestPlanErrors(t *testing.T) {
 
 func TestReadInputs(t *testing.T) {
 	set := func(env map[string]string) {
-		for _, k := range []string{"VERSION", "VERSION-FILES", "CHANGELOG", "TAG-FORMAT", "COMMIT-MESSAGE", "ALLOW-BRANCH"} {
+		for _, k := range []string{"VERSION", "VERSION-FILES", "CHANGELOG", "TAG-FORMAT", "COMMIT-MESSAGE", "ALLOW-BRANCH", "COMMIT-NOTES"} {
 			t.Setenv("INPUT_"+k, env[k])
 		}
 	}
@@ -258,6 +342,7 @@ func TestReadInputs(t *testing.T) {
 		"no commit message": {"COMMIT-MESSAGE", ""},
 		"bad version file":  {"VERSION-FILES", "manifest.json"},
 		"bad allow-branch":  {"ALLOW-BRANCH", "yes"},
+		"bad commit-notes":  {"COMMIT-NOTES", "yes"},
 	} {
 		env := defaults()
 		env[change[0]] = change[1]
@@ -437,7 +522,7 @@ func TestRunAllowBranch(t *testing.T) {
 	}
 }
 
-func TestRunOnlyIfChanged(t *testing.T) {
+func TestRunOnlyIfChangedWithCommitNotes(t *testing.T) {
 	remote, outputs := setupRun(t, []string{"v1.2.0"}, "main")
 	write(t, "server/version.go", "const Version = \"1.2.0\"\n")
 	write(t, "app/package.json", packageJSON)
@@ -453,6 +538,8 @@ func TestRunOnlyIfChanged(t *testing.T) {
 	t.Setenv("INPUT_VERSION-FILES", `server/version.go: const Version = "{version}"`)
 	t.Setenv("INPUT_NPM-PACKAGES", "app")
 	t.Setenv("INPUT_ONLY-IF-CHANGED", "server\napp")
+	t.Setenv("INPUT_CHANGELOG", "")
+	t.Setenv("INPUT_COMMIT-NOTES", "true")
 
 	if err := Run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -465,5 +552,9 @@ func TestRunOnlyIfChanged(t *testing.T) {
 	}
 	if got := outputValue(t, outputs, "changed"); got != "app" {
 		t.Errorf("output changed = %q", got)
+	}
+	// Only the commit since v1.2.0, not the release commit.
+	if got := outputValue(t, outputs, "notes"); got != "### Features\n\n- **app:** add index" {
+		t.Errorf("output notes = %q", got)
 	}
 }

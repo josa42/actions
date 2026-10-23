@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/josa42/actions/changelog"
+	"github.com/josa42/actions/conventional"
 	"github.com/josa42/actions/git"
 	"github.com/josa42/actions/github"
 	"github.com/josa42/actions/semver"
@@ -29,6 +30,7 @@ type inputs struct {
 	tagFormat     string
 	commitMessage string
 	allowBranch   bool
+	commitNotes   bool
 }
 
 func readInputs() (inputs, error) {
@@ -55,6 +57,9 @@ func readInputs() (inputs, error) {
 		return in, fmt.Errorf("input version-files: %w", err)
 	}
 	if in.allowBranch, err = toolkit.InputBool("allow-branch"); err != nil {
+		return in, err
+	}
+	if in.commitNotes, err = toolkit.InputBool("commit-notes"); err != nil {
 		return in, err
 	}
 	return in, nil
@@ -168,12 +173,21 @@ func checkBranch(ctx context.Context, client *github.Client, gh *github.Context,
 type history struct {
 	// changed are the only-if-changed directories that changed.
 	changed []string
+	// subjects of the commits, oldest first. Only read for commit-notes.
+	subjects []string
 }
 
 // readHistory compares the checkout with since, the tag of the latest
-// release. Without one, every directory counts as changed.
+// release. Without one, every directory counts as changed and every commit
+// is new.
 func readHistory(repo git.Repo, in inputs, since string) (history, error) {
 	var h history
+	if in.commitNotes {
+		var err error
+		if h.subjects, err = repo.Subjects(since); err != nil {
+			return h, fmt.Errorf("%w. commit-notes needs the history, check out with fetch-depth: 0", err)
+		}
+	}
 	for _, dir := range in.onlyIfChanged {
 		changed := since == ""
 		if !changed {
@@ -215,6 +229,7 @@ func (p releasePlan) paths() []string {
 func plan(in inputs, version, date string, h history) (releasePlan, error) {
 	var p releasePlan
 
+	promoted := false
 	if in.changelog != "" {
 		data, err := os.ReadFile(in.changelog)
 		switch {
@@ -228,9 +243,13 @@ func plan(in inputs, version, date string, h history) (releasePlan, error) {
 				return p, fmt.Errorf("%s: %w", in.changelog, err)
 			}
 			p.edits = append(p.edits, edit{in.changelog, content})
-			p.notes = notes
+			p.notes, promoted = notes, true
 			fmt.Printf("%s: Unreleased → %s - %s\n", in.changelog, version, date)
 		}
+	}
+	if !promoted && in.commitNotes {
+		p.notes = commitNotes(h.subjects)
+		fmt.Printf("Release notes from %d commits\n", len(h.subjects))
 	}
 
 	for _, f := range in.files {
@@ -309,6 +328,42 @@ func unchanged(in inputs, h history, name string) (string, bool) {
 func inside(name, dir string) bool {
 	name, dir = path.Clean(name), path.Clean(dir)
 	return dir == "." || name == dir || strings.HasPrefix(name, dir+"/")
+}
+
+// noteSections are the commit types in generated release notes, in order.
+var noteSections = []struct{ typ, title string }{
+	{"feat", "Features"},
+	{"fix", "Fixes"},
+	{"perf", "Performance"},
+}
+
+// commitNotes generates release notes from Conventional Commits subjects,
+// grouped by type. Other types and subjects that are no Conventional Commits
+// are left out.
+func commitNotes(subjects []string) string {
+	var sections []string
+	for _, s := range noteSections {
+		var lines []string
+		for _, subject := range subjects {
+			c, ok := conventional.Parse(subject)
+			if !ok || c.Type != s.typ {
+				continue
+			}
+			line := "- "
+			if c.Scope != "" {
+				line += "**" + c.Scope + ":** "
+			}
+			line += c.Description
+			if c.Breaking {
+				line += " **(breaking)**"
+			}
+			lines = append(lines, line)
+		}
+		if len(lines) > 0 {
+			sections = append(sections, "### "+s.title+"\n\n"+strings.Join(lines, "\n"))
+		}
+	}
+	return strings.Join(sections, "\n\n")
 }
 
 // current returns the content of a file, with the edits planned so far.
