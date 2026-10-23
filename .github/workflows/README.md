@@ -11,6 +11,7 @@ Call one with `uses: josa42/actions/.github/workflows/<file>@main`.
 | [`shared-ha-plugin.yml`](shared-ha-plugin.yml) | Home Assistant frontend cards: syntax check and HACS |
 | [`shared-ha-blueprints.yml`](shared-ha-blueprints.yml) | Home Assistant blueprint repositories driven by a Makefile |
 | [`shared-ha-release.yml`](shared-ha-release.yml) | Releases for integrations and cards, started by hand |
+| [`shared-release.yml`](shared-release.yml) | Releases for apps, started by hand: version, tag and GitHub release |
 | [`shared-esphome.yml`](shared-esphome.yml) | ESPHome device configs: yamllint and `esphome config` |
 | [`shared-nvim-plugin.yml`](shared-nvim-plugin.yml) | Neovim plugins: stylua and plenary busted |
 | [`shared-go.yml`](shared-go.yml) | Go modules: build, test and vet |
@@ -283,6 +284,69 @@ failed job.
 | `node_version` | `"22"` | Node version for `build` |
 | `draft` | `false` | |
 | `prerelease` | `false` | |
+
+## shared-release.yml
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 1.2.3, or major, minor or patch
+        required: true
+        default: patch
+
+jobs:
+  release:
+    uses: josa42/actions/.github/workflows/shared-release.yml@main
+    permissions:
+      contents: write
+      actions: read
+    with:
+      version: ${{ inputs.version }}
+      require-workflow: ci.yml
+      npm-packages: |
+        app
+        extension
+      only-if-changed: |
+        extension
+```
+
+Start a release with `gh workflow run release -f version=minor`. With
+`require-workflow`, the release fails early unless a run of that workflow
+succeeded for the commit being released, so a release never ships a commit
+with failing checks. Unlike `shared-ha-release.yml`, it does not run the
+checks again.
+
+The `prepare` job uses [release-prepare] to set the version in the
+`version-files` and `npm-packages`, date the `## Unreleased` section of
+`CHANGELOG.md` if there is one, then commit, tag and push. Version files and
+npm packages inside an `only-if-changed` directory keep their version unless
+the directory changed since the latest release; the `changed` output lists
+the ones that got it.
+
+The `publish` job uses [release-publish] to create the GitHub release, with
+no assets. The release notes are the changelog section, or without a
+changelog the features, fixes and performance improvements among the
+Conventional Commits since the latest release. If publishing fails, re-run
+the failed job.
+
+| Input | Default | |
+| --- | --- | --- |
+| `version` | | `1.2.3`, or `major`, `minor` or `patch` |
+| `version-files` | | `path: template` lines, see [release-prepare] |
+| `npm-packages` | | Directories of npm packages, see [release-prepare] |
+| `only-if-changed` | | Directories that keep their version unless they changed |
+| `commit-message` | `chore(release): {version}` | |
+| `require-workflow` | | Workflow file, e.g. `ci.yml`, that must have succeeded |
+
+| Output | |
+| --- | --- |
+| `version` | The released version, e.g. `1.2.3` |
+| `tag` | The release tag, e.g. `v1.2.3` |
+| `sha` | The tagged commit |
+| `changed` | The `only-if-changed` directories that got the version, one per line |
+| `url` | The release URL |
 
 [release-prepare]: ../../release-prepare
 [release-publish]: ../../release-publish

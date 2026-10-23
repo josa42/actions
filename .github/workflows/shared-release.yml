@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to release, e.g. 1.2.3, or major, minor or patch
+        required: true
+        type: string
+      version-files:
+        description: >-
+          Files to set the version in, one "path: template" per line
+        required: false
+        type: string
+        default: ""
+      npm-packages:
+        description: Directories of npm packages to set the version in, one per line
+        required: false
+        type: string
+        default: ""
+      only-if-changed:
+        description: >-
+          Directories, one per line, whose version files and npm packages only
+          get the version if the directory changed since the latest release
+        required: false
+        type: string
+        default: ""
+      commit-message:
+        description: Message of the release commit, with a {version} placeholder
+        required: false
+        type: string
+        default: "chore(release): {version}"
+      require-workflow:
+        description: >-
+          Workflow file, e.g. ci.yml, that must have succeeded for the commit
+          being released
+        required: false
+        type: string
+        default: ""
+    outputs:
+      version:
+        description: The released version
+        value: ${{ jobs.prepare.outputs.version }}
+      tag:
+        description: The release tag
+        value: ${{ jobs.prepare.outputs.tag }}
+      sha:
+        description: The tagged commit
+        value: ${{ jobs.prepare.outputs.sha }}
+      changed:
+        description: The only-if-changed directories that got the version, one per line
+        value: ${{ jobs.prepare.outputs.changed }}
+      url:
+        description: The release URL
+        value: ${{ jobs.publish.outputs.url }}
+
+# Two releases at once would race for the same version.
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  # Bumps, commits, tags and pushes. Everything that can fail before the push
+  # runs here, so a failed release leaves nothing behind.
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: read
+
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      tag: ${{ steps.prepare.outputs.tag }}
+      sha: ${{ steps.prepare.outputs.sha }}
+      changed: ${{ steps.prepare.outputs.changed }}
+      notes: ${{ steps.prepare.outputs.notes }}
+
+    steps:
+      # The tags and the history tell what changed since the latest release.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check that ${{ inputs.require-workflow }} succeeded
+        if: inputs.require-workflow != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.require-workflow }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          count=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW/runs?head_sha=$sha&status=success" --jq .total_count)
+          if [[ "$count" == "0" ]]; then
+            echo "::error::$WORKFLOW has not succeeded for $sha, wait for it or fix it before releasing"
+            exit 1
+          fi
+
+      - id: prepare
+        uses: josa42/actions/release-prepare@dist
+        with:
+          version: ${{ inputs.version }}
+          version-files: ${{ inputs.version-files }}
+          npm-packages: ${{ inputs.npm-packages }}
+          only-if-changed: ${{ inputs.only-if-changed }}
+          commit-message: ${{ inputs.commit-message }}
+          commit-notes: 'true'
+
+  # Publishes the release of the tag. Safe to re-run on failure.
+  publish:
+    name: Publish
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+
+    steps:
+      - id: publish
+        uses: josa42/actions/release-publish@dist
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          notes: ${{ needs.prepare.outputs.notes }}

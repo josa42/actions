@@ -49,6 +49,9 @@
 - **release-prepare writes notes from commits.** With `commit-notes` and no
   changelog, the release notes list the features, fixes and performance
   improvements among the Conventional Commits since the latest release.
+- **shared-release.** Releases an app by hand: sets the version, tags, pushes
+  and creates the GitHub release, optionally only after a workflow succeeded
+  for the released commit.
 
 ### Changed
 
