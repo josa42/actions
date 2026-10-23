@@ -105,3 +105,30 @@ func (r Repo) PushAtomic(remote string, refspecs ...string) error {
 	_, err := r.run(nil, append([]string{"push", "--atomic", remote}, refspecs...)...)
 	return err
 }
+
+// ChangedSince reports whether path differs between rev and the working
+// tree.
+func (r Repo) ChangedSince(rev, path string) (bool, error) {
+	_, err := r.run(nil, "diff", "--quiet", rev, "--", path)
+	if err == nil {
+		return false, nil
+	}
+	if exitCode(err) == 1 {
+		return true, nil
+	}
+	return false, err
+}
+
+// Subjects returns the subjects of the commits after rev up to HEAD, oldest
+// first. An empty rev returns every commit.
+func (r Repo) Subjects(rev string) ([]string, error) {
+	rng := "HEAD"
+	if rev != "" {
+		rng = rev + "..HEAD"
+	}
+	out, err := r.run(nil, "log", "--reverse", "--format=%s", rng)
+	if err != nil || out == "" {
+		return nil, err
+	}
+	return strings.Split(out, "\n"), nil
+}

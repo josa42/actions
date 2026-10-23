@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -132,5 +133,61 @@ func TestErrorMessage(t *testing.T) {
 	err := r.Add("missing.txt")
 	if err == nil || !strings.Contains(err.Error(), "missing.txt") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestChangedSinceAndSubjects(t *testing.T) {
+	r, _ := setup(t)
+	git(t, r.Dir, "tag", "v1.0.0")
+
+	os.MkdirAll(filepath.Join(r.Dir, "app"), 0o755)
+	os.MkdirAll(filepath.Join(r.Dir, "server"), 0o755)
+	write(t, r, "server/main.go", "package main")
+	r.Add("server/main.go")
+	r.Commit("feat(server): add main", Bot)
+	write(t, r, "app/index.js", "")
+	r.Add("app/index.js")
+	r.Commit("fix(app): add index", Bot)
+	git(t, r.Dir, "tag", "v1.1.0")
+	write(t, r, "app/index.js", "x")
+	r.Add("app/index.js")
+	r.Commit("feat(app): change index", Bot)
+
+	tests := []struct {
+		rev, path string
+		want      bool
+	}{
+		{"v1.0.0", "app", true},
+		{"v1.0.0", "server", true},
+		{"v1.1.0", "app", true},
+		{"v1.1.0", "server", false},
+		{"v1.1.0", "missing", false},
+		{"HEAD", "a.txt", false},
+	}
+	for _, tt := range tests {
+		if got, err := r.ChangedSince(tt.rev, tt.path); err != nil || got != tt.want {
+			t.Errorf("ChangedSince(%s, %s) = %v, %v, want %v", tt.rev, tt.path, got, err, tt.want)
+		}
+	}
+
+	// Uncommitted changes count too.
+	write(t, r, "server/main.go", "package server")
+	if got, err := r.ChangedSince("v1.1.0", "server"); err != nil || !got {
+		t.Errorf("ChangedSince with a modified file = %v, %v", got, err)
+	}
+
+	if _, err := r.ChangedSince("v9.9.9", "app"); err == nil {
+		t.Error("ChangedSince of a missing tag did not fail")
+	}
+
+	for rev, want := range map[string][]string{
+		"v1.0.0": {"feat(server): add main", "fix(app): add index", "feat(app): change index"},
+		"v1.1.0": {"feat(app): change index"},
+		"HEAD":   nil,
+		"":       {"init", "feat(server): add main", "fix(app): add index", "feat(app): change index"},
+	} {
+		if got, err := r.Subjects(rev); err != nil || !slices.Equal(got, want) {
+			t.Errorf("Subjects(%q) = %q, %v, want %q", rev, got, err, want)
+		}
 	}
 }
