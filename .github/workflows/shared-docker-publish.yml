@@ -32,6 +32,9 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
+      BUILD_SECRETS:
+        description: 'BuildKit secrets, one id=value per line, like a token for private dependencies (optional)'
+        required: false
 
 # A release has a group of its own, so that a publish of the same branch
 # does not cancel it before its version tags are pushed.
@@ -76,6 +79,7 @@ jobs:
           push: true
           tags: ${{ inputs.image }}:${{ matrix.platform }}-${{ inputs.version || 'latest' }}
           build-args: ${{ inputs.build-args }}
+          secrets: ${{ secrets.BUILD_SECRETS }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
