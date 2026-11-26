@@ -59,6 +59,10 @@
 - **shared-extension-publish builds the zips.** With `build`, it runs the
   command in `working-directory` on a checkout of `ref`, such as the release
   tag, instead of taking the zips from an artifact of the run.
+- **Private Go modules and build secrets.** `shared-go` takes an optional
+  secret `GIT_TOKEN` that reads private modules of josa42, and
+  `shared-docker-publish` an optional secret `BUILD_SECRETS` for BuildKit, so
+  apps on the private homelab-kit build in CI and as images.
 
 ### Changed
 
